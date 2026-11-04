@@ -259,3 +259,13 @@ def test_sentry_event_scrubs_demo_api_key_header():
 
     assert scrubbed["request"]["headers"]["X-Demo-Api-Key"] == "[Filtered]"
     assert DEMO_KEY not in repr(scrubbed)
+
+
+def test_outbound_network_backend_connects_to_validated_ip_not_hostname():
+    from backend.api.routes.demo import _PinnedNetworkBackend
+
+    backend = _PinnedNetworkBackend("llm.example.com", ("8.8.8.8",))
+    with patch("backend.api.routes.demo.SyncBackend.connect_tcp") as connect_tcp:
+        backend.connect_tcp("llm.example.com", 443, 30.0, None, None)
+
+    connect_tcp.assert_called_once_with("8.8.8.8", 443, 30.0, None, None)
