@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, defineAsyncComponent } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { usePlayerStore } from '@/stores/playerStore'
@@ -14,6 +14,11 @@ import UnifiedFloatingPlayer from '@/components/UnifiedFloatingPlayer.vue'
 import CookieConsent from '@/components/CookieConsent.vue'
 import PwaInstallBanner from '@/components/PwaInstallBanner.vue'
 import PwaIosInstallGuide from '@/components/PwaIosInstallGuide.vue'
+import { isDemoMode } from '@/demo/config'
+
+const DemoBanner = isDemoMode
+  ? defineAsyncComponent(() => import('@/demo/DemoBanner.vue'))
+  : null
 
 const router = useRouter()
 const route = useRoute()
@@ -92,6 +97,7 @@ onMounted(async () => {
 
 <template>
   <div class="app-container">
+    <DemoBanner v-if="isDemoMode" />
     <DesktopShell v-if="showDesktopShell">
       <router-view v-slot="{ Component }">
         <keep-alive include="FeedView,ListenView">

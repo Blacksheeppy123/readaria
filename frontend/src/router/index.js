@@ -4,6 +4,7 @@ import { useOnboardingStore } from '@/stores/onboardingStore'
 import { useFeedStore } from '@/stores/feedStore'
 import { responsive } from './responsive'
 import i18n from '@/i18n'
+import { isDemoMode } from '@/demo/config'
 
 /**
  * 老用户保护：如果用户已有 feeds，自动完成 onboarding，避免强制老用户走 onboarding 流程。
@@ -38,9 +39,15 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      name: 'landing',
-      component: () => import('@/views/LandingView.vue'),
-      meta: { title: 'Your Feeds, Narrated', skipAuth: true, hideTabbar: true }
+      name: isDemoMode ? 'demo' : 'landing',
+      component: () => isDemoMode
+        ? import('@/demo/DemoView.vue')
+        : import('@/views/LandingView.vue'),
+      meta: {
+        title: isDemoMode ? 'Public Demo' : 'Your Feeds, Narrated',
+        skipAuth: true,
+        hideTabbar: true
+      }
     },
     {
       path: '/company',
@@ -212,7 +219,8 @@ const router = createRouter({
       name: 'onboarding-path',
       component: () => import('@/views/OnboardingPathView.vue'),
       meta: { titleKey: 'onboarding.path.title', requiresAuth: true, hideTabbar: true, desktopBare: true }
-    }
+    },
+    ...(isDemoMode ? [{ path: '/demo', redirect: '/' }] : [])
     // Week 5 Cleanup (2025-11-20): WeChatConfigView route removed
     // Reason: Migrated to RSSHub-CookieCloud solution - Cookie 配置现在通过浏览器插件完成
   ]
