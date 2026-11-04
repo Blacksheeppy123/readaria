@@ -2,9 +2,9 @@
 Readaria 知识管理系统 - 统一配置管理
 """
 import os
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Annotated
 from pydantic import validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, NoDecode
 from pathlib import Path
 
 # 项目根目录
@@ -219,10 +219,11 @@ class Settings(BaseSettings):
 
     # ---- 白名单配置 ----
     # 功能白名单：允许使用测试期特权能力（AI 摘要、播客、TTS 预生成等）
-    feature_whitelist: List[str] = []
+    # NoDecode：env 源对复杂字段默认 JSON 解码，空值/逗号串会抛 SettingsError（同 newsroom_admin_users 事故）
+    feature_whitelist: Annotated[List[str], NoDecode] = []
 
     # 前端日志白名单：仅允许上传浏览器端日志，不授予其它特权
-    frontend_log_whitelist: List[str] = []
+    frontend_log_whitelist: Annotated[List[str], NoDecode] = []
 
     @validator('feature_whitelist', pre=True)
     def parse_feature_whitelist(cls, v):
