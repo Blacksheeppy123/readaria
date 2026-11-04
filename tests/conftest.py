@@ -16,6 +16,8 @@ os.environ.setdefault("POSTGRES_PASSWORD", "test_postgres_password")
 # 需 ≥32 字符（settings.py 有长度校验）
 os.environ.setdefault("SECRET_KEY", "test_secret_key_0123456789_0123456789")
 os.environ.setdefault("JWT_SECRET_KEY", "test_jwt_secret_key_0123456789_012345")
+# 需 ≥10 字符（settings.py 有长度校验）；纯测试哑值
+os.environ.setdefault("OPENAI_API_KEY", "sk-test-dummy-openai-key")
 
 import pytest
 import requests

@@ -14,4 +14,5 @@ regexes = [
   '''test_secret_key_[0-9_]+''',
   '''test_jwt_secret_key_[0-9_]+''',
   '''test_postgres_password''',
+  '''sk-test-dummy-openai-key''',
 ]
