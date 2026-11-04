@@ -34,6 +34,10 @@ def spa_app(tmp_path, monkeypatch):
     async def health():
         return {"status": "ok"}
 
+    @app.get("/user/{user_id}/feeds")
+    async def feeds(user_id: str):
+        return {"user_id": user_id, "feeds": []}
+
     assert spa.mount_spa(app) is True
     return app
 
@@ -68,7 +72,7 @@ async def test_unknown_frontend_route_falls_back_to_index_html(spa_app):
     assert response.text == '<!doctype html><div id="app">Readaria</div>'
 
 
-@pytest.mark.parametrize("path", ["/api", "/api/nonexistent"])
+@pytest.mark.parametrize("path", ["/api", "/api/nonexistent", "/api/nonexistent/"])
 async def test_unknown_api_route_returns_404_instead_of_index_html(spa_app, path):
     response = await _get(spa_app, path)
 
@@ -81,3 +85,27 @@ async def test_existing_static_asset_is_served(spa_app):
 
     assert response.status_code == 200
     assert response.text == "console.log('readaria')"
+
+
+@pytest.mark.parametrize(
+    ("path", "location"),
+    [
+        ("/api/health/?probe=1", "http://testserver/api/health?probe=1"),
+        ("/user/123/feeds/", "http://testserver/user/123/feeds"),
+        ("/docs/", "http://testserver/docs"),
+    ],
+)
+async def test_existing_route_trailing_slash_still_redirects(spa_app, path, location):
+    response = await _get(spa_app, path)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == location
+
+
+async def test_trailing_slash_method_mismatch_does_not_redirect(spa_app):
+    async with AsyncClient(
+        transport=ASGITransport(app=spa_app), base_url="http://testserver"
+    ) as client:
+        response = await client.post("/api/health/")
+
+    assert response.status_code == 404
