@@ -1,0 +1,17 @@
+# Cloudflare Workers 配置文件
+# 用于部署静态网站（Vue PWA）
+
+name = "readaria-app"
+main = "src/index.js"
+compatibility_date = "2025-11-27"
+
+# 静态资产配置（指向构建输出目录）
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+html_handling = "auto-trailing-slash"  # 自动处理尾部斜杠
+not_found_handling = "single-page-application"  # SPA 路由支持
+
+# 环境变量（可选）
+[vars]
+ENVIRONMENT = "production"

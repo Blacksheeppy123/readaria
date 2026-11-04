@@ -1,0 +1,7 @@
+# 最小化 Cloudflare Workers 配置
+
+name = "readaria-app"
+compatibility_date = "2025-11-27"
+
+[assets]
+directory = "./dist"

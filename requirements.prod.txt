@@ -1,0 +1,65 @@
+# ========== 生产环境必需依赖 ==========
+
+# Web Framework
+fastapi==0.109.0
+uvicorn==0.27.0
+starlette==0.35.1
+
+# Database
+psycopg2-binary==2.9.9
+SQLAlchemy==2.0.41
+
+# Auth & Security
+python-jose==3.5.0
+passlib==1.7.4
+bcrypt==4.0.1
+cryptography==46.0.3
+slowapi==0.1.9
+
+# RSS & Parsing
+feedparser==6.0.10
+beautifulsoup4==4.14.2
+lxml==6.0.2
+
+# HTTP & Async
+httpx==0.28.1
+aiohttp==3.12.13
+requests==2.31.0
+
+# NLP (轻量级)
+spacy==3.7.2
+jieba==0.42.1
+zh-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/zh_core_web_sm-3.7.0/zh_core_web_sm-3.7.0-py3-none-any.whl#sha256=f51075665749e07406d629d1055ce5a68635fae6ab3c34257ee798c62b4fc431
+
+# AI & LangChain
+openai==3.11.0
+langchain-core==1.6.2
+langchain-openai==1.6.2
+# 已移除 langchain / langchain-community / langchain-text-splitters：代码无引用。
+# processor.py 已改用 langchain_core.prompts（langchain 1.x 移除了 langchain.prompts 命名空间，
+# 且 langchain 1.x 会拖入 langgraph 依赖树，无需安装）。
+
+# Scheduler
+APScheduler==3.11.0
+
+# Utils
+python-dotenv==1.0.0
+python-multipart>=0.0.6
+pydantic==2.13.5
+pydantic-settings==2.9.1
+email-validator==2.2.0
+PyYAML==6.0.2
+
+# Backup
+coscmd
+
+# TTS (Text-to-Speech)
+pydub>=0.25.1
+google-cloud-texttospeech>=2.16.0
+azure-cognitiveservices-speech>=1.35.0
+
+# Error Tracking & Observability
+sentry-sdk[fastapi]>=2.0.0
+
+# Language detection
+langdetect==1.0.9

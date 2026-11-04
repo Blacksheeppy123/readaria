@@ -1,0 +1,196 @@
+# ================================
+# Jasmine Knowledge Management System
+# Git Ignore File
+# ================================
+
+# ---- Python ----
+__pycache__/
+.superpowers
+.agents/
+.codex/
+.playwright-mcp/
+*.wav
+.wrangler/
+output/
+*.py[cod]
+*$py.class
+*.so
+*.png
+# *.pdf
+#*.md
+.Python
+#.github
+*.html
+
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+memory/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.trees
+*.example
+!.env.example
+MANIFEST
+
+# ---- Virtual Environment ----
+venv/
+ENV/
+env/
+.venv/
+
+# ---- MCP Config (contains tokens) ----
+.mcp.json
+
+# ---- Environment Files ----
+.env
+.env.local
+.env.production
+.env.rsshub
+.env.staging
+.env.test
+.env.prod
+# ---- Data and Logs ----
+data/logs/
+data/temp/
+logs/
+*.log
+*.log.*
+
+# ---- Database ----
+*.db
+*.sqlite3
+*.dump
+
+# ---- Temporary Files ----
+temp/
+tmp/
+.tmp/
+*.tmp
+*.temp
+
+# ---- IDE and Editors ----
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ---- Coverage Reports ----
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# ---- Jupyter Notebooks ----
+.ipynb_checkpoints/
+
+# ---- Node.js (if any frontend) ----
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---- Docker ----
+.dockerignore
+
+# ---- OS Specific ----
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ---- Application Specific ----
+# Cache files
+*.cache
+.cache/
+audio_cache/
+audio/
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Generated files
+*.pid
+*.seed
+*.pid.lock
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env.test
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# next.js build output
+.next
+
+# nuxt.js build output
+.nuxt
+
+# vuepress build output
+.vuepress/dist
+
+# Serverless directories
+.serverless
+
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/
+
+# ---- Elastic Search ----
+elasticsearch-data/
+
+# ---- Redis ----
+redis-data/
+
+# ---- PostgreSQL ----
+postgres-data/
+
+.gemini/
+gha-creds-*.json
+
+.claude
+.worktrees/
+# codex-review-notes
+tmp_db_query.py

@@ -1,0 +1,84 @@
+services:
+  postgres:
+    image: postgres:14-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-readaria}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting Readaria}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    command: >
+      sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then
+      exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD";
+      else exec redis-server --appendonly yes; fi'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping; else redis-cli ping; fi"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-readaria}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting Readaria}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      TTS_CACHE_DIR: /app/audio_cache/
+      TTS_SEGMENT_CACHE_DIR: /app/audio_cache/tts_segments
+      PODCAST_AUDIO_CACHE_DIR: /app/podcast_cache/
+      RSSHUB_LOCAL_URL: http://rsshub:1200
+    command: ["sh", "-c", "python backend/storage/init_database_production.py && exec uvicorn backend.api.main:app --host 0.0.0.0 --port 8000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - audio_cache:/app/audio_cache
+      - podcast_cache:/app/podcast_cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  rsshub:
+    image: diygod/rsshub:latest
+    restart: unless-stopped
+    profiles: ["rsshub"]
+    ports:
+      - "1200:1200"
+
+volumes:
+  postgres_data:
+  redis_data:
+  audio_cache:
+  podcast_cache:

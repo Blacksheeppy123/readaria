@@ -1,0 +1,214 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: jasmine
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free Disk Space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h
+          echo "=== Cleaning up ==="
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker image prune -af
+          echo "=== Disk space after cleanup ==="
+          df -h
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.test.txt
+
+      - name: Install Frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps
+
+      - name: Setup environment variables
+        run: |
+          # 使用 cat heredoc 创建 .env 文件（单引号防止变量展开）
+          cat > .env << 'EOF'
+          POSTGRES_HOST=localhost
+          POSTGRES_PORT=5432
+          POSTGRES_DB=jasmine
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=test_password
+          REDIS_HOST=localhost
+          REDIS_PORT=6379
+          OPENAI_API_KEY=dummy-openai-key-for-ci-testing-1234567890
+          SECRET_KEY=ci-secret-key-0123456789abcdef0123456789abcdef
+          JWT_SECRET_KEY=ci-jwt-secret-key-0123456789abcdef0123456789abcdef
+          APP_DEBUG=true
+          EOF
+
+      - name: Initialize Database
+        run: |
+          # 使用与生产环境一致的初始化流程（production_init.sql），避免依赖有历史问题的增量迁移
+          python manage.py db init --production
+
+      - name: Start Backend API
+        run: |
+          # 使用 uvicorn 直接启动（不使用 reload，避免 import string 错误）
+          nohup uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
+          API_PID=$!
+          echo "Backend API started with PID: $API_PID"
+
+          echo "Waiting for API to start..."
+          API_READY=false
+          for i in {1..30}; do
+            if curl -f http://localhost:8000/docs > /dev/null 2>&1; then
+              echo "✅ Backend API is ready"
+              API_READY=true
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 1
+          done
+
+          if [ "$API_READY" = false ]; then
+            echo "❌ Backend API failed to start within 30 seconds"
+            echo "=== Backend logs ==="
+            cat backend.log
+            exit 1
+          fi
+
+          # 验证 API 响应
+          echo "Testing API endpoint..."
+          curl -v http://localhost:8000/docs || (echo "❌ API endpoint test failed" && cat backend.log && exit 1)
+
+      - name: Register test user
+        run: |
+          curl -fsS -X POST http://localhost:8000/api/auth/register \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"test-user","email":"test-user@example.com","password":"test1234","full_name":"Test User"}'
+
+      - name: Run TTS regression (API level)
+        env:
+          TEST_BASE_URL: http://localhost:8000
+          TEST_USER_ID: test-user
+          TEST_USERNAME: test-user
+          TEST_PASSWORD: test1234
+        run: |
+          # 运行 TTS 流式缓存回归用例（跳过需要真实 OpenAI 的 integration 标记）
+          python -m pytest -v tests/api/test_tts_streaming.py -m "not integration"
+
+      - name: Start Frontend (Vite Dev Server)
+        working-directory: frontend
+        run: |
+          echo "Starting Vite dev server..."
+          nohup npm run dev > frontend.log 2>&1 &
+          FRONTEND_PID=$!
+          echo "Frontend started with PID: $FRONTEND_PID"
+
+          echo "Waiting for frontend to be ready..."
+          for i in {1..60}; do
+            if curl -f http://localhost:5173 > /dev/null 2>&1; then
+              echo "✅ Frontend is ready"
+              break
+            fi
+            echo "Waiting... ($i/60)"
+            sleep 1
+          done
+
+          # 验证前端响应
+          curl -I http://localhost:5173 || (echo "❌ Frontend failed to start" && cat frontend.log && exit 1)
+
+          # 调试：获取前端页面内容
+          echo "=== Frontend HTML content ==="
+          curl -s http://localhost:5173 | head -50
+          echo ""
+          echo "=== Frontend log (last 50 lines) ==="
+          cat frontend.log | tail -50
+
+      - name: Debug - List Playwright tests
+        working-directory: frontend
+        run: npx playwright test --list
+
+      - name: Run Playwright tests
+        working-directory: frontend
+        timeout-minutes: 20
+        run: |
+          set -o pipefail
+          DEBUG=pw:api npx playwright test --reporter=list 2>&1 | tee playwright-output.log
+
+      - name: Upload Playwright Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: frontend/tests/reports/e2e/
+          retention-days: 30
+
+      - name: Upload Frontend Logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-logs
+          path: frontend/frontend.log
+          retention-days: 7
+
+      - name: Upload Playwright Debug Output
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-debug-output
+          path: frontend/playwright-output.log
+          retention-days: 7
+
+      - name: Upload Backend Logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-logs
+          path: backend.log
+          retention-days: 7

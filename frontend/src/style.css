@@ -1,0 +1,150 @@
+/* 全局样式 - 移动端优先 */
+:root {
+  --readaria-ink: #172130;
+  --readaria-navy: #1b293a;
+  --readaria-paper: #fbf7f0;
+  --readaria-stone: #efe6d9;
+  --readaria-surface: #fffaf3;
+  --readaria-accent: #c75b39;
+  --readaria-accent-soft: rgba(199, 91, 57, 0.12);
+  --readaria-muted: rgba(23, 33, 48, 0.68);
+  --readaria-border: rgba(23, 33, 48, 0.1);
+  --readaria-serif: Georgia, "Times New Roman", "Songti SC", serif;
+  --van-primary-color: var(--readaria-navy);
+  --van-blue: var(--readaria-navy);
+  --van-button-primary-background: var(--readaria-navy);
+  --van-button-primary-border-color: var(--readaria-navy);
+  --van-button-primary-color: var(--readaria-paper);
+  --van-slider-active-background: var(--readaria-accent);
+  --van-tabbar-item-active-color: var(--readaria-accent);
+  --van-nav-bar-icon-color: var(--readaria-navy);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica,
+    Arial, sans-serif;
+  background: var(--readaria-paper);
+  color: var(--readaria-ink);
+  line-height: 1.5;
+  font-size: 14px;
+  /* 防止移动端选中文本时出现蓝色背景 */
+  -webkit-tap-highlight-color: transparent;
+  /* 优化滚动性能 */
+  -webkit-overflow-scrolling: touch;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 优化移动端输入框 */
+input, textarea {
+  font-size: 16px; /* 防止iOS自动缩放 */
+  border-radius: 4px;
+  font-family: inherit;
+}
+
+/* 优化按钮点击效果 */
+button {
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+  cursor: pointer;
+}
+
+/* 优化链接点击效果 */
+a {
+  -webkit-tap-highlight-color: transparent;
+  text-decoration: none;
+  color: inherit;
+}
+
+/* 滚动条样式优化（webkit浏览器） */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+/* 禁用双击缩放 */
+* {
+  touch-action: pan-y;
+}
+
+/* 优化移动端长按选择 */
+img {
+  -webkit-touch-callout: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ===================================
+   iOS 安全区域适配 - 全局层
+   策略：移除全局 body padding，避免与组件 placeholder 冲突
+   只处理固定定位的通用组件（NavBar, Tabbar）
+   页面级内容间距由各页面自己管理
+   =================================== */
+@supports (padding: env(safe-area-inset-top)) {
+  /* ✅ 只保留左右安全区域（横屏模式） */
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* ✅ 固定定位的 NavBar - 顶部安全区域 */
+  .van-nav-bar--fixed {
+    padding-top: env(safe-area-inset-top);
+    top: 0;
+  }
+
+  /* ✅ NavBar 占位符 - 高度 = NavBar 高度 + 顶部安全区域 */
+  .van-nav-bar__placeholder {
+    height: calc(46px + env(safe-area-inset-top)) !important;
+  }
+
+  /* ✅ 固定定位的 Tabbar - 底部安全区域 */
+  .van-tabbar {
+    padding-bottom: env(safe-area-inset-bottom);
+    height: calc(50px + env(safe-area-inset-bottom));
+    box-sizing: content-box; /* 确保 padding 不影响内容高度 */
+  }
+}
+
+/* ===================================
+   桌面端阅读排版（desktop reading）
+   =================================== */
+:root {
+  /* Georgia 无 CJK 字形，中文逐字形回退到宋体系；西文优先 Georgia */
+  --reading-serif: Georgia, 'Times New Roman', 'Songti SC', 'Noto Serif SC',
+    'Noto Serif CJK SC', 'SimSun', serif;
+  --reading-font-size: 18px;
+  --reading-line-height: 1.9;
+  --reading-measure: 660px;
+  --reading-paragraph-gap: 1em;
+  --desktop-sidebar-width: 220px;
+  --desktop-list-width: 360px;
+}

@@ -1,0 +1,17 @@
+{
+  "name": "jasmine-mcp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"No tests\"",
+    "mcp:playwright": "npx -y @playwright/mcp"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "private": true,
+  "devDependencies": {
+    "@playwright/mcp": "^0.0.45"
+  }
+}

@@ -1,0 +1,182 @@
+import { test, expect } from '@playwright/test';
+
+// 本 spec 验证移动端 UI；钉住移动视口，避免桌面断点（≥1024px）激活桌面布局
+test.use({ viewport: { width: 390, height: 844 } });
+
+
+const mockUser = {
+  id: 'test-user-id',
+  username: 'test-user',
+  email: 'test@example.com',
+  preferred_language: 'en',
+};
+
+const mockArticle = {
+  id: 101,
+  title: 'Open article while audio keeps playing',
+  url: 'https://example.com/articles/audio-bridge',
+  summary: 'The player and article page should share context while audio continues.',
+  content: '<p>This is the original article body used for the launch UI bridge test.</p>',
+  source: 'https://example.com/feed.xml',
+  author: 'Jasmine QA',
+  published_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+};
+
+async function mockLaunchApi(page) {
+  await page.route('**/api/auth/me', async (route) => {
+    await route.fulfill({ json: mockUser });
+  });
+
+  await page.route('**/user/*/feeds', async (route) => {
+    await route.fulfill({
+      json: [
+        {
+          id: 1,
+          feed_name: 'Deep Tech',
+          feed_url: 'https://example.com/feed.xml',
+          is_active: true,
+        },
+      ],
+    });
+  });
+
+  await page.route('**/api/user/*/feeds/articles**', async (route) => {
+    await route.fulfill({ json: [mockArticle] });
+  });
+
+  await page.route('**/api/articles/by-url**', async (route) => {
+    await route.fulfill({ json: { article: mockArticle } });
+  });
+
+  await page.route('**/api/saved/status**', async (route) => {
+    await route.fulfill({ json: { saved: false } });
+  });
+
+  await page.route('**/api/articles/read', async (route) => {
+    await route.fulfill({ json: { status: 'success' } });
+  });
+
+  await page.route('**/api/v1/subscription/me', async (route) => {
+    await route.fulfill({
+      json: {
+        plan: 'pro',
+        plan_name: 'Pro',
+        status: 'active',
+        tts_daily_limit: -1,
+        tts_used_today: 0,
+        podcast_daily_limit: 1,
+        podcast_used_today: 0,
+      },
+    });
+  });
+
+  await page.route('**/api/v1/podcasts', async (route) => {
+    await route.fulfill({ json: { podcasts: [] } });
+  });
+
+  // Mock TTS prepare endpoint: audio is ready
+  await page.route('**/api/v1/tts/prepare/*', async (route) => {
+    await route.fulfill({ json: { final_ready: true, first_playable_ready: true, status: 'ready' } });
+  });
+
+  // Mock TTS play endpoint: return a minimal valid MP3 (1 silent frame)
+  await page.route('**/api/v1/tts/play/*', async (route) => {
+    const mp3Base64 = 'SUQzBAAAAAAAAP/7kAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+    const mp3Buffer = Buffer.from(mp3Base64, 'base64');
+    await route.fulfill({
+      status: 200,
+      contentType: 'audio/mpeg',
+      body: mp3Buffer,
+    });
+  });
+}
+
+async function seedAuth(page) {
+  await page.addInitScript(({ user, article }) => {
+    localStorage.setItem('readaria_token', 'test-token');
+    localStorage.setItem('readaria_user', JSON.stringify(user));
+    localStorage.setItem('locale', 'en');
+    localStorage.setItem('readaria_cookie_consent', 'accepted');
+    localStorage.setItem('tts_playlist', JSON.stringify([article]));
+    localStorage.setItem('tts_current_index', '0');
+    localStorage.setItem(
+      'tts_progress',
+      JSON.stringify({
+        url: article.url,
+        currentTime: 45,
+        totalTime: 300,
+        timestamp: Date.now(),
+      }),
+    );
+  }, { user: mockUser, article: mockArticle });
+}
+
+test.describe('Launch UI critical flow', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockLaunchApi(page);
+    await seedAuth(page);
+  });
+
+  test('shows launch Feed and Listen modules with mocked data', async ({ page }) => {
+    await page.goto('/feed');
+
+    await expect(page.getByText('Featured')).toBeVisible();
+    await expect(page.getByText('1 new · 1 ready to listen')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Playable' })).toBeVisible();
+    await expect(page.getByText(mockArticle.title)).toBeVisible();
+
+    await page.getByRole('button', { name: "Generate today's podcast" }).click();
+    await expect(page).toHaveURL(/\/listen/);
+    await expect(page.getByText('Continue')).toBeVisible();
+    await expect(page.getByText('Your queue')).toBeVisible();
+    await expect(page.getByText("Today's recap")).toBeVisible();
+  });
+
+  test('opens current article from Player without losing article context', async ({ page }) => {
+    await page.goto('/player');
+
+    await expect(page.getByText(mockArticle.title)).toBeVisible();
+    await page.getByRole('button', { name: 'Open article' }).click();
+
+    await expect(page).toHaveURL(/\/article\//);
+    await expect(page.getByRole('heading', { name: mockArticle.title })).toBeVisible();
+    await expect(page.getByText('This is the original article body used for the launch UI bridge test.')).toBeVisible();
+    await expect(page.getByText('Back to player')).toBeVisible();
+    await expect(page.locator('.action-bar')).toHaveCount(0);
+
+    // Regression: mini-player must have interactive controls, not a static bar
+    await expect(page.locator('.mini-player-bar .mini-player-title')).toBeVisible();
+    await expect(page.locator('.mini-player-bar .van-progress')).toBeVisible();
+    await expect(page.locator('.mini-player-bar .mini-player-close')).toBeVisible();
+
+    await page.locator('.mini-player-bar').click();
+    await expect(page).toHaveURL(/\/player/);
+  });
+
+  test('article detail TTS mini-player shows interactive controls on playback', async ({ page }) => {
+    // Go to feed and open the article detail page
+    await page.goto('/feed');
+    await expect(page.getByText(mockArticle.title)).toBeVisible();
+    await page.getByText(mockArticle.title).click();
+    await expect(page).toHaveURL(/\/article\//);
+
+    // Click "Listen to this article" to trigger TTS
+    await page.getByRole('button', { name: 'Listen to this article' }).click();
+
+    // Mini-player should appear with loading or play/pause controls (not a static text bar)
+    await expect(page.locator('.mini-player-bar')).toBeVisible();
+    await expect(page.locator('.mini-player-bar .van-progress')).toBeVisible();
+    await expect(page.locator('.mini-player-bar .mini-player-close')).toBeVisible();
+
+    // The action bar should be hidden while the mini-player is active
+    await expect(page.locator('.action-bar')).toHaveCount(0);
+
+    // Close the mini-player
+    await page.locator('.mini-player-bar .mini-player-close').click();
+    await expect(page.locator('.mini-player-bar')).toHaveCount(0);
+
+    // Action bar should reappear
+    await expect(page.locator('.action-bar')).toBeVisible();
+  });
+});

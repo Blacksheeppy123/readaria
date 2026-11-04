@@ -1,0 +1,17 @@
+# Gitleaks configuration for Readaria.
+# The allowlist only covers obviously-labeled dummy values used in tests/CI.
+# Any REAL credential finding must be fixed, not allowlisted.
+
+[allowlist]
+description = "Clearly-labeled dummy secrets in tests and CI"
+regexes = [
+  '''ci-secret-key-[0-9a-f]+''',
+  '''ci-jwt-secret-key-[0-9a-f]+''',
+  '''ci-openai-key-[0-9a-f]+''',
+  '''test-secret-key-[0-9a-f]+''',
+  '''test-jwt-key-[0-9a-f]+''',
+  '''dummy-openai-key-for-ci-testing-[0-9]+''',
+  '''test_secret_key_[0-9_]+''',
+  '''test_jwt_secret_key_[0-9_]+''',
+  '''test_postgres_password''',
+]

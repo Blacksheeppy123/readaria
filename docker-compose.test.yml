@@ -1,0 +1,49 @@
+version: '3.8'
+
+# 轻量级测试环境配置
+# 用途：本地快速测试，不影响开发环境
+# 特点：使用内存数据库，测试完自动清理
+
+services:
+  postgres-test:
+    image: postgres:14-alpine
+    container_name: jasmine-postgres-test
+    environment:
+      POSTGRES_DB: jasmine_test
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test123
+    ports:
+      - "5433:5432"  # 使用不同端口，避免与开发环境冲突
+    tmpfs:
+      # 使用内存文件系统，加速测试，重启自动清空
+      - /var/lib/postgresql/data
+    command: >
+      postgres
+      -c fsync=off
+      -c synchronous_commit=off
+      -c full_page_writes=off
+      -c random_page_cost=1.0
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  redis-test:
+    image: redis:alpine
+    container_name: jasmine-redis-test
+    ports:
+      - "6380:6379"  # 使用不同端口
+    command: redis-server --save "" --appendonly no  # 禁用持久化，加速测试
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+# 注意：
+# 1. 不包含 RSSHub、Browserless、wechat2rss 等外部服务
+# 2. 这些服务在测试中使用 Mock 替代
+# 3. 如需测试完整集成，使用 docker-compose.yml

@@ -1,0 +1,14 @@
+{
+  "name": "Readaria - Your Feeds, Narrated",
+  "short_name": "Readaria",
+  "description": "RSS reader with AI summaries and text-to-speech. Turn your feeds into a daily brief.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1989fa",
+  "orientation": "portrait-primary",
+  "icons": [],
+  "categories": ["productivity", "news", "utilities"],
+  "screenshots": [],
+  "shortcuts": []
+}

@@ -1,0 +1,77 @@
+# ========== 测试环境依赖 ==========
+# 基于 requirements.prod.txt，添加测试工具
+# 用于本地测试环境
+
+# ========== 生产环境核心依赖（测试需要） ==========
+
+# Web Framework
+fastapi==0.109.0
+uvicorn==0.27.0
+starlette==0.35.1
+
+# Database
+psycopg2-binary==2.9.9
+SQLAlchemy==2.0.41
+
+# Auth & Security
+python-jose==3.5.0
+passlib==1.7.4
+bcrypt==4.0.1
+cryptography==46.0.3
+
+# RSS & Parsing
+feedparser==6.0.10
+beautifulsoup4==4.14.2
+lxml==6.0.2
+
+# HTTP & Async
+httpx==0.28.1
+aiohttp==3.12.13
+requests==2.31.0
+
+# AI & OpenAI (测试需要 Mock)
+openai>=3.8,<4
+langchain-core==1.6.2
+langchain-openai==1.6.2
+azure-cognitiveservices-speech>=1.35.0
+
+# Scheduler
+APScheduler==3.11.0
+
+# Rate Limiting
+slowapi==0.1.9
+
+# Utils
+python-dotenv==1.0.0
+python-multipart>=0.0.6
+pydantic==2.13.5
+pydantic-settings==2.9.1
+email-validator==2.2.0
+PyYAML==6.0.2
+pydub==0.25.1
+
+# ========== 测试专用依赖 ==========
+
+# 测试框架
+pytest==8.4.2
+pytest-asyncio==0.24.0
+pytest-mock==3.12.0
+pytest-cov==4.1.0
+pytest-html==4.1.1
+pytest-watch==4.2.0
+pytest-xdist==3.5.0  # 并行测试
+
+# Mock 工具
+fakeredis==2.21.1
+responses==0.24.1
+
+# 代码质量（可选）
+# black==23.12.1
+# ruff==0.1.9
+# mypy==1.7.1
+
+# Language detection
+langdetect==1.0.9
+
+# Google Cloud TTS（test_speech_service 需要；此前老 venv 残留未声明）
+google-cloud-texttospeech>=2.16.0
