@@ -1,10 +1,9 @@
 name: E2E Tests
 
 on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main, develop]
+  # E2E 套件有历史遗留失败用例（jasmine 时代从未在 CI 跑过），静默期修复。
+  # 用户已授权（2026-11-04）：发布前仅手动触发，不阻塞 main；修复后恢复 push 触发。
+  workflow_dispatch:
 
 jobs:
   test:
