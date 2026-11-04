@@ -51,6 +51,10 @@ email-validator==2.2.0
 PyYAML==6.0.2
 pydub==0.25.1
 
+# NLP (与 requirements.prod.txt 保持一致，E2E 启动后端需要)
+spacy==3.7.2
+zh-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/zh_core_web_sm-3.7.0/zh_core_web_sm-3.7.0-py3-none-any.whl#sha256=f51075665749e07406d629d1055ce5a68635fae6ab3c34257ee798c62b4fc431
+
 # ========== 测试专用依赖 ==========
 
 # 测试框架

@@ -15,7 +15,7 @@ jobs:
       postgres:
         image: postgres:15-alpine
         env:
-          POSTGRES_DB: jasmine
+          POSTGRES_DB: readaria
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: test_password
         ports:
@@ -80,7 +80,7 @@ jobs:
           cat > .env << 'EOF'
           POSTGRES_HOST=localhost
           POSTGRES_PORT=5432
-          POSTGRES_DB=jasmine
+          POSTGRES_DB=readaria
           POSTGRES_USER=postgres
           POSTGRES_PASSWORD=test_password
           REDIS_HOST=localhost
