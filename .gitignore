@@ -22,6 +22,11 @@ output/
 #.github
 *.html
 
+# The Vue entry point and PWA assets are source files, not generated reports.
+!frontend/index.html
+!frontend/public/offline.html
+!frontend/public/*.png
+
 build/
 develop-eggs/
 dist/

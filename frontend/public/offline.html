@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>离线模式 - Readaria</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .offline-container {
+            max-width: 500px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.7;
+                transform: scale(0.95);
+            }
+        }
+
+        h1 {
+            font-size: 28px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        p {
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 25px;
+            opacity: 0.9;
+        }
+
+        .retry-btn {
+            display: inline-block;
+            padding: 12px 30px;
+            background: #fff;
+            color: #667eea;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+
+        .retry-btn:hover {
+            background: #f0f0f0;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .retry-btn:active {
+            transform: translateY(0);
+        }
+
+        .tips {
+            margin-top: 30px;
+            padding-top: 25px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .tips h3 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+
+        .tips ul {
+            list-style: none;
+            text-align: left;
+            display: inline-block;
+        }
+
+        .tips li {
+            margin-bottom: 10px;
+            padding-left: 20px;
+            position: relative;
+            font-size: 14px;
+            opacity: 0.85;
+        }
+
+        .tips li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #4ade80;
+            font-weight: bold;
+        }
+
+        @media (max-width: 480px) {
+            .offline-container {
+                padding: 30px 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .icon {
+                font-size: 60px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-container">
+        <div class="icon">📡</div>
+        <h1>您当前处于离线状态</h1>
+        <p>无法连接到网络，但您仍然可以浏览已缓存的内容。</p>
+        <button class="retry-btn" onclick="window.location.reload()">重新连接</button>
+
+        <div class="tips">
+            <h3>离线模式下您可以：</h3>
+            <ul>
+                <li>浏览最近阅读的文章</li>
+                <li>查看已缓存的订阅列表</li>
+                <li>使用搜索功能（限已缓存内容）</li>
+                <li>阅读收藏的文章</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // 监听网络状态变化
+        window.addEventListener('online', function() {
+            // 网络恢复时自动刷新
+            setTimeout(function() {
+                window.location.href = '/';
+            }, 1000);
+        });
+
+        // 显示网络状态
+        if (navigator.onLine) {
+            document.querySelector('p').textContent = '网络已恢复，正在重新加载...';
+            setTimeout(function() {
+                window.location.href = '/';
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
