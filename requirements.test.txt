@@ -12,6 +12,7 @@ starlette==0.35.1
 # Database
 psycopg2-binary==2.9.9
 SQLAlchemy==2.0.41
+redis==5.2.1
 
 # Auth & Security
 python-jose==3.5.0

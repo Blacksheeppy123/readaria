@@ -51,6 +51,22 @@ from slowapi.errors import RateLimitExceeded
 # ================== 音频播放签名 URL 工具 ==================
 # 用于替代 JWT query token，防止令牌泄露到日志和浏览器历史中
 
+
+def _scrub_sensitive_headers(event):
+    """Remove visitor-owned demo credentials before any Sentry transmission."""
+    headers = event.get("request", {}).get("headers", {})
+    if isinstance(headers, dict):
+        for name in headers:
+            if name.lower() == "x-demo-api-key":
+                headers[name] = "[Filtered]"
+    elif isinstance(headers, list):
+        for index, item in enumerate(headers):
+            if isinstance(item, (list, tuple)) and len(item) == 2:
+                if str(item[0]).lower() == "x-demo-api-key":
+                    headers[index] = (item[0], "[Filtered]")
+    return event
+
+
 _AUDIO_SIG_TTL_SECONDS = 300  # 签名有效期 5 分钟
 
 
@@ -209,6 +225,7 @@ if settings.sentry_dsn:
     from sentry_sdk.integrations.logging import LoggingIntegration
 
     def _before_send(event, hint):
+        _scrub_sensitive_headers(event)
         # 过滤前端日志上报产生的噪音事件
         transaction = event.get("transaction") or ""
         if "/api/v1/frontend-logs" in transaction:
@@ -277,12 +294,16 @@ def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # 添加CORS中间件
+_cors_allow_headers = ["Authorization", "Content-Type", "X-Silent", "Range", "If-None-Match"]
+if settings.demo_mode:
+    _cors_allow_headers.extend(["X-Demo-Api-Key", "X-Demo-Base-Url", "X-Turnstile-Token"])
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Silent", "Range", "If-None-Match"],
+    allow_headers=_cors_allow_headers,
 )
 
 # 数据库连接归还中间件：每个请求结束后将连接归还到连接池
@@ -4330,3 +4351,24 @@ async def create_experience_podcast(
     except Exception as e:
         logger.error(f"创建 experience podcast 失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Optional public demo. Self-hosted/default installs do not import Redis, mount
+# demo routes, or expose demo assets unless DEMO_MODE is explicitly enabled.
+if settings.demo_mode:
+    import redis
+
+    from backend.api.routes.demo import create_demo_router
+
+    demo_redis = redis.Redis.from_url(
+        settings.redis_url,
+        decode_responses=True,
+        socket_connect_timeout=2.0,
+        socket_timeout=2.0,
+    )
+    app.include_router(create_demo_router(settings=settings, redis_client=demo_redis))
+    app.mount(
+        "/static/demo",
+        StaticFiles(directory=os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "demo")),
+        name="demo-static",
+    )

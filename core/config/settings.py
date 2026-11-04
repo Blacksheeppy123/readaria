@@ -171,6 +171,11 @@ class Settings(BaseSettings):
     max_summary_length: int = 150
     entity_extraction_enabled: bool = True
 
+    # ---- 公共 Demo（默认关闭）----
+    demo_mode: bool = False
+    demo_turnstile_secret_key: str = ""
+    demo_daily_interaction_limit: int = 3
+
     # ---- 抓取配置 ----
     fetch_max_retries: int = 3
     fetch_timeout: int = 30
