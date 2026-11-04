@@ -1,4 +1,15 @@
-# ========== 阶段 1: 构建依赖 ==========
+# ========== 阶段 1: 构建 Vue PWA ==========
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /app/frontend
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ ./
+RUN npm run build
+
+# ========== 阶段 2: 构建 Python 依赖 ==========
 FROM python:3.11-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -19,7 +30,7 @@ RUN apt-get update && \
 COPY requirements.prod.txt .
 RUN pip install --prefix=/install -r requirements.prod.txt
 
-# ========== 阶段 2: 运行时镜像 ==========
+# ========== 阶段 3: 运行时镜像 ==========
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -46,6 +57,7 @@ RUN groupadd -r jasmine && \
 
 # 复制应用代码
 COPY --chown=jasmine:jasmine backend backend
+COPY --from=frontend-builder --chown=jasmine:jasmine /app/frontend/dist backend/static/web
 COPY --chown=jasmine:jasmine core core
 COPY --chown=jasmine:jasmine manage.py manage.py
 

@@ -30,7 +30,7 @@ docker compose up -d
 docker compose ps
 ```
 
-The backend API documentation is at `http://localhost:8000/docs` by default. For internet access, put the services behind a correctly configured HTTPS reverse proxy, update `CORS_ALLOWED_ORIGINS`, and restrict direct access to database and Redis ports. Do not expose PostgreSQL or Redis to the public internet.
+Open `http://localhost:8000` for the Readaria PWA. The API image serves the built Vue frontend and supports refreshing history-mode routes; no separate frontend service is required. The backend API documentation is at `http://localhost:8000/docs` by default. For internet access, put the services behind a correctly configured HTTPS reverse proxy, update `CORS_ALLOWED_ORIGINS`, and restrict direct access to database and Redis ports. Do not expose PostgreSQL or Redis to the public internet.
 
 RSS reading works without an AI provider account. Article narration can fall back to the browser's Web Speech implementation where supported. AI summaries, podcast generation/Q&A, and server-side audio require valid provider configuration.
 

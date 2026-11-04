@@ -28,6 +28,7 @@ import base64
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
+from backend.api.spa import mount_spa
 from backend.fetcher.rss_fetcher import RSSFetcher
 from backend.fetcher.feed_url_manager import FeedURLManager
 from backend.nlp.processor import NLPProcessor
@@ -610,12 +611,8 @@ async def require_podcast_quota(current_user: Dict = Depends(get_current_user)) 
 
 # ================== 根路径 ==================
 
-@app.get("/", response_class=HTMLResponse)
-@app.head("/", response_class=HTMLResponse)
 async def root():
-    """
-    API根路径，返回服务信息
-    """
+    """Fallback service information when the frontend build is unavailable."""
     return """
     <!DOCTYPE html>
     <html>
@@ -4372,3 +4369,10 @@ if settings.demo_mode:
         StaticFiles(directory=os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "demo")),
         name="demo-static",
     )
+
+
+# Mount the SPA last so existing API, docs, and demo routes take precedence.
+# Keep the legacy service-information page for source installs without a web build.
+if not mount_spa(app):
+    app.add_api_route("/", root, methods=["GET"], response_class=HTMLResponse)
+    app.add_api_route("/", root, methods=["HEAD"], response_class=HTMLResponse)

@@ -25,7 +25,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-The API documentation is available at `http://localhost:8000/docs` by default. See [docs/self-hosting.md](docs/self-hosting.md) for configuration, upgrades, backups, and troubleshooting.
+Open `http://localhost:8000` to use the Readaria PWA; the API image includes the built frontend, so no separate frontend deployment is required. The API documentation is available at `http://localhost:8000/docs` by default. See [docs/self-hosting.md](docs/self-hosting.md) for configuration, upgrades, backups, and troubleshooting.
 
 **Running without AI provider accounts:** RSS reading does not call an AI provider, and supported browsers can narrate articles through the Web Speech fallback. Server-side TTS, AI summaries, podcast generation, and podcast Q&A require valid provider credentials. Leave the example `OPENAI_API_KEY` placeholder in place if you only use non-AI features; replace it before enabling AI features.
 

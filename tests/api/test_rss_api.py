@@ -18,7 +18,7 @@ class TestRSSAPI:
         """测试服务器健康状态"""
         response = api_client.get(f"{api_base_url}/")
         assert response.status_code == 200
-        assert "Readaria RSS Manager" in response.text
+        assert '<div id="app">' in response.text
 
     @pytest.mark.e2e
     @pytest.mark.external

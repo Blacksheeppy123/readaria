@@ -183,7 +183,7 @@ export const usePodcastStore = defineStore('podcast', () => {
       const response = await api.get(`/api/v1/podcasts/${podcastId}/audio-url`)
       // 响应拦截器已经返回 response.data
       if (response.success) {
-        return `${import.meta.env.VITE_API_BASE_URL}${response.audio_url}`
+        return `${import.meta.env.VITE_API_BASE_URL || ''}${response.audio_url}`
       }
       throw new Error('Failed to get audio URL')
     } catch (error) {

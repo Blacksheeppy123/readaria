@@ -18,9 +18,10 @@ class TestUIFeatures:
 
         # 检查HTML内容
         soup = BeautifulSoup(response.text, 'html.parser')
-        # 现阶段后端返回占位页或前端 dev server 未由后端托管，只校验标题包含关键字
+        # Docker 镜像直接托管 Vue PWA
         title = soup.find('title').text if soup.find('title') else ''
-        assert 'Readaria RSS Manager' in title
+        assert 'Readaria' in title
+        assert soup.find('div', id='app')
 
     @pytest.mark.xfail(strict=False, reason="后端未托管旧版静态文件，使用 SPA 开发服务器")
     def test_static_files_loading(self, api_client, api_base_url):
