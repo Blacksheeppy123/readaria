@@ -18,6 +18,7 @@ import secrets
 import shutil
 import sys
 from typing import Any
+from urllib.parse import urlparse
 
 import bcrypt
 import psycopg2
@@ -45,6 +46,12 @@ def _reading_metrics(text: str, language: str) -> tuple[int, int]:
     return word_count, max(1, math.ceil(word_count / 200))
 
 
+def _validate_http_url(url: str, label: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(f"{label} must use an http/https URL")
+
+
 def _validate_input(data: dict[str, Any]) -> None:
     for section in ("podcasts", "articles"):
         if not isinstance(data.get(section, []), list):
@@ -55,6 +62,7 @@ def _validate_input(data: dict[str, Any]) -> None:
         missing = [key for key in article_required if not article.get(key)]
         if missing:
             raise ValueError(f"Article is missing required fields: {', '.join(missing)}")
+        _validate_http_url(article["url"], f"Article {article['demo_id']} URL")
 
     podcast_required = ("demo_id", "title", "audio_file")
     for podcast in data.get("podcasts", []):
@@ -64,6 +72,11 @@ def _validate_input(data: dict[str, Any]) -> None:
         share_token = f"demo-{podcast['demo_id']}"
         if len(share_token) > 32:
             raise ValueError(f"Podcast demo_id produces an overlong share_token: {share_token}")
+        for story in podcast.get("stories", []):
+            if story.get("url"):
+                _validate_http_url(
+                    story["url"], f"Podcast {podcast['demo_id']} story URL"
+                )
 
 
 def _audio_plan(data: dict[str, Any], input_path: Path, settings) -> list[dict[str, str]]:
@@ -144,7 +157,7 @@ def _ensure_feed(cursor, source_name: str) -> tuple[int, str]:
         """
         INSERT INTO user_feeds (
             user_id, source_type_id, feed_name, feed_url, is_active, platform
-        ) VALUES (%s, 'blog', %s, %s, TRUE, 'rss')
+        ) VALUES (%s, 'rss', %s, %s, TRUE, 'rss')
         ON CONFLICT (user_id, feed_url) DO NOTHING
         RETURNING id
         """,
@@ -161,20 +174,68 @@ def _ensure_feed(cursor, source_name: str) -> tuple[int, str]:
 
 
 def _ensure_global_article(cursor, article: dict[str, Any], feed_url: str) -> int:
-    cursor.execute("SELECT id FROM global_articles WHERE url = %s", (article["url"],))
+    cursor.execute(
+        """
+        SELECT id, title, author, published_at, content, summary, source_feed_url,
+               source_type_id, language, word_count, reading_time
+        FROM global_articles
+        WHERE url = %s
+        """,
+        (article["url"],),
+    )
     row = cursor.fetchone()
-    if row:
-        return row["id"]
-
     excerpt = article["excerpt"]
     language = article.get("language", "zh")
     word_count, reading_time = _reading_metrics(excerpt, language)
+    curated_values = {
+        "title": article["title"],
+        "author": article.get("author"),
+        "published_at": article.get("published_at"),
+        "content": excerpt,
+        "summary": article["summary"],
+        "source_feed_url": feed_url,
+        "source_type_id": "blog",
+        "language": language,
+        "word_count": word_count,
+        "reading_time": reading_time,
+    }
+    if row:
+        # URL collisions must not leak previously fetched private content through
+        # the public demo. Mark and converge the shared row to the curated input.
+        # The row comparison prevents no-op updates from advancing timestamps.
+        cursor.execute(
+            """
+            UPDATE global_articles
+            SET title = %(title)s,
+                author = %(author)s,
+                published_at = %(published_at)s,
+                content = %(content)s,
+                summary = %(summary)s,
+                source_feed_url = %(source_feed_url)s,
+                source_type_id = %(source_type_id)s,
+                language = %(language)s,
+                word_count = %(word_count)s,
+                reading_time = %(reading_time)s
+            WHERE id = %(id)s
+              AND (
+                  title, author, published_at, content, summary, source_feed_url,
+                  source_type_id, language, word_count, reading_time
+              ) IS DISTINCT FROM (
+                  %(title)s, %(author)s, %(published_at)s, %(content)s,
+                  %(summary)s, %(source_feed_url)s, %(source_type_id)s,
+                  %(language)s, %(word_count)s, %(reading_time)s
+              )
+            """,
+            {**curated_values, "id": row["id"]},
+        )
+        return row["id"]
+
     cursor.execute(
         """
         INSERT INTO global_articles (
             url, content_hash, title, author, published_at, content, summary,
             source_feed_url, source_type_id, language, word_count, reading_time
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'blog', %s, %s, %s)
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'rss', %s, %s, %s)
         RETURNING id
         """,
         (
@@ -205,7 +266,7 @@ def _ensure_legacy_article(
         INSERT INTO articles (
             feed_id, source_type_id, title, url, author, published_at, summary,
             content, content_hash, language, word_count, reading_time, source
-        ) VALUES (%s, 'blog', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ) VALUES (%s, 'rss', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (feed_id, url) DO NOTHING
         RETURNING id
         """,
@@ -243,7 +304,9 @@ def _import_article(cursor, article: dict[str, Any], tts_audio_path: str | None)
         INSERT INTO user_article_refs (
             user_id, global_article_id, legacy_article_id, feed_id, user_summary
         ) VALUES (%s, %s, %s, %s, %s)
-        ON CONFLICT (user_id, global_article_id, feed_id) DO NOTHING
+        ON CONFLICT (user_id, global_article_id, feed_id) DO UPDATE SET
+            legacy_article_id = EXCLUDED.legacy_article_id,
+            user_summary = EXCLUDED.user_summary
         """,
         (
             DEMO_CURATOR_ID,
@@ -262,6 +325,7 @@ def _import_article(cursor, article: dict[str, Any], tts_audio_path: str | None)
             summary = EXCLUDED.summary,
             generated_at = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP
+        WHERE article_summaries.summary IS DISTINCT FROM EXCLUDED.summary
         """,
         (global_article_id, language, article["summary"]),
     )
@@ -304,6 +368,13 @@ def _ensure_podcast(cursor, podcast: dict[str, Any]) -> int:
             audio_url = EXCLUDED.audio_url,
             source = 'demo'
         WHERE podcasts.user_id = %s
+          AND (
+              podcasts.title, podcasts.description, podcasts.duration,
+              podcasts.generation_status, podcasts.audio_url, podcasts.source
+          ) IS DISTINCT FROM (
+              EXCLUDED.title, EXCLUDED.description, EXCLUDED.duration,
+              EXCLUDED.generation_status, EXCLUDED.audio_url, EXCLUDED.source
+          )
         RETURNING id
         """,
         (
@@ -318,7 +389,17 @@ def _ensure_podcast(cursor, podcast: dict[str, Any]) -> int:
     )
     row = cursor.fetchone()
     if row is None:
-        raise ValueError(f"Podcast share_token is already used by another account: {share_token}")
+        # A content-identical upsert deliberately returns no row. Resolve the
+        # existing demo podcast while still rejecting another owner's token.
+        cursor.execute(
+            "SELECT id, user_id FROM podcasts WHERE share_token = %s",
+            (share_token,),
+        )
+        row = cursor.fetchone()
+        if row is None or row["user_id"] != DEMO_CURATOR_ID:
+            raise ValueError(
+                f"Podcast share_token is already used by another account: {share_token}"
+            )
     return row["id"]
 
 
@@ -385,7 +466,26 @@ def _wipe(cursor) -> None:
     # Registry rows go first so content deletion cannot cascade away row counts
     # before the operation is reported. Feeds cascade to articles and refs;
     # podcasts cascade to podcast_articles. Shared global_articles remain.
-    cursor.execute("DELETE FROM demo_content_registry")
+    cursor.execute(
+        """
+        DELETE FROM demo_content_registry AS r
+        WHERE (
+            r.podcast_id IS NOT NULL
+            AND EXISTS (
+                SELECT 1 FROM podcasts p
+                WHERE p.id = r.podcast_id AND p.user_id = %s
+            )
+        ) OR (
+            r.global_article_id IS NOT NULL
+            AND EXISTS (
+                SELECT 1 FROM global_articles ga
+                WHERE ga.id = r.global_article_id
+                  AND ga.source_feed_url LIKE %s
+            )
+        )
+        """,
+        (DEMO_CURATOR_ID, "demo://%"),
+    )
     registry_count = cursor.rowcount
     cursor.execute("DELETE FROM podcasts WHERE user_id = %s", (DEMO_CURATOR_ID,))
     podcast_count = cursor.rowcount
