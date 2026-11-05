@@ -112,28 +112,34 @@ def _load_registry(settings):
                     (
                         SELECT uf.feed_name
                         FROM user_article_refs uar
-                        JOIN user_feeds uf ON uf.id = uar.feed_id
+                        JOIN user_feeds uf
+                          ON uf.id = uar.feed_id
+                         AND uf.feed_url = ga.source_feed_url
                         WHERE uar.user_id = %s
                           AND uar.global_article_id = ga.id
                         ORDER BY uar.id
                         LIMIT 1
                     ) AS source_name,
-                    COALESCE(
-                        (
-                            SELECT s.summary
-                            FROM article_summaries s
-                            WHERE s.global_article_id = ga.id
-                            ORDER BY s.generated_at DESC, s.id DESC
-                            LIMIT 1
-                        ),
-                        ga.summary
+                    (
+                        SELECT demo_ref.user_summary
+                        FROM user_article_refs demo_ref
+                        JOIN user_feeds demo_feed
+                          ON demo_feed.id = demo_ref.feed_id
+                         AND demo_feed.feed_url = ga.source_feed_url
+                        WHERE demo_ref.user_id = %s
+                          AND demo_ref.global_article_id = ga.id
+                          AND demo_ref.user_summary IS NOT NULL
+                        ORDER BY demo_ref.id
+                        LIMIT 1
                     ) AS summary
                 FROM demo_content_registry r
-                JOIN global_articles ga ON ga.id = r.global_article_id
+                JOIN global_articles ga
+                  ON ga.id = r.global_article_id
+                 AND ga.source_feed_url LIKE %s
                 WHERE r.kind = 'article'
                 ORDER BY r.sort_order, r.created_at, r.demo_id
                 """,
-                (_DEMO_CURATOR_ID,),
+                (_DEMO_CURATOR_ID, _DEMO_CURATOR_ID, "demo://%"),
             )
             articles = [dict(row) for row in cursor.fetchall()]
 
