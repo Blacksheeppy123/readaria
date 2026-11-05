@@ -47,6 +47,12 @@ async function setupDesktopSession(page: Page) {
   await page.route('**/api/auth/me', (route) =>
     route.fulfill({ json: { id: 1, username: 'e2e-user', email: 'e2e@example.com' } })
   );
+  await page.route('**/api/v1/playback-state', (route) =>
+    route.fulfill({ json: { playlist: [] } })
+  );
+  await page.route('**/api/v1/queue', (route) =>
+    route.fulfill({ json: { items: [] } })
+  );
   await page.route('**/api/user/*/feeds/articles**', (route) =>
     route.fulfill({ json: { articles: ARTICLES, pagination: { total: 2, playable_total: 0 }, overview: {} } })
   );

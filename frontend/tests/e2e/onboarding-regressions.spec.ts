@@ -96,6 +96,14 @@ async function mockOnboardingRegressionApis(page) {
     await route.fulfill({ json: mockUser })
   })
 
+  await page.route('**/api/v1/playback-state', async (route) => {
+    await route.fulfill({ json: { playlist: [] } })
+  })
+
+  await page.route('**/api/v1/queue', async (route) => {
+    await route.fulfill({ json: { items: [] } })
+  })
+
   await page.route('**/user/*/feeds', async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({ json: mockFeeds })
@@ -252,7 +260,7 @@ test.describe('Onboarding regressions', () => {
       await route.fulfill({ json: { status: 'success', removed_feed_ids: [11, 12] } })
     })
 
-    await page.route('**/api/v1/onboarding/starter-pack?language=zh', async (route) => {
+    await page.route('**/api/v1/onboarding/starter-pack/activate**', async (route) => {
       seenRequests.push({ type: 'starter-pack', url: route.request().url() })
       await route.fulfill({
         json: {
@@ -282,7 +290,7 @@ test.describe('Onboarding regressions', () => {
       localStorage.setItem('readaria_user', JSON.stringify({ ...user, preferred_language: 'zh' }))
       localStorage.setItem('readaria_cookie_consent', 'accepted')
       localStorage.setItem('locale', 'zh')
-      localStorage.setItem('onboarding_state', 'path_pending')
+      localStorage.setItem('onboarding_state', 'onboarding_complete')
       localStorage.setItem(
         'onboarding_completed',
         JSON.stringify({
@@ -291,14 +299,23 @@ test.describe('Onboarding regressions', () => {
       )
     }, { user: mockUser })
 
-    await page.goto('/onboarding/path')
+    // Load legacy feeds into feedStore, then enter onboarding without a reload so
+    // confirmQuickStart exercises the reset-existing-feeds branch.
+    await page.goto('/feed')
+    await expect(page.locator('.feed-tabs').getByText('Deep Tech')).toBeVisible()
+    await page.evaluate(() => {
+      window.history.pushState({}, '', '/onboarding/path')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+    await expect(page).toHaveURL(/\/onboarding\/path/)
+
     await page.locator('.path-card--primary .card-cta, .path-card--primary button').first().click()
     await expect(page).toHaveURL(/\/feed/)
 
     expect(seenRequests.map(item => item.type)).toEqual([
       'reset',
-      'starter-pack',
-      'experience-podcast'
+      'experience-podcast',
+      'starter-pack'
     ])
   })
 })
