@@ -1,9 +1,9 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { createDemoSummary, fetchDemoContent } from './api'
-import { demoApiBaseUrl } from './config'
 import ByokPanel from './ByokPanel.vue'
 
+const podcasts = ref([])
 const articles = ref([])
 const loading = ref(true)
 const loadError = ref('')
@@ -12,7 +12,8 @@ const interactions = reactive({})
 onMounted(async () => {
   try {
     const data = await fetchDemoContent()
-    articles.value = data.articles
+    podcasts.value = data.podcasts || []
+    articles.value = data.articles || []
   } catch (error) {
     loadError.value = error.message
   } finally {
@@ -20,13 +21,32 @@ onMounted(async () => {
   }
 })
 
+function formatDate(dateStr) {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+function formatDuration(seconds) {
+  if (seconds == null || Number.isNaN(Number(seconds))) return ''
+  const total = Math.max(0, Math.floor(Number(seconds)))
+  const mins = Math.floor(total / 60)
+  const secs = total % 60
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+}
+
+function podcastMeta(podcast) {
+  return [formatDate(podcast.created_at), formatDuration(podcast.duration)].filter(Boolean).join(' · ')
+}
+
 async function summarize(article) {
-  interactions[article.id] = { loading: true, summary: '', error: '' }
+  interactions[article.demo_id] = { loading: true, summary: '', error: '' }
   try {
-    const data = await createDemoSummary(article)
-    interactions[article.id] = { loading: false, summary: data.summary, error: '' }
+    const data = await createDemoSummary({ content: article.excerpt })
+    interactions[article.demo_id] = { loading: false, summary: data.summary, error: '' }
   } catch (error) {
-    interactions[article.id] = { loading: false, summary: '', error: error.message }
+    interactions[article.demo_id] = { loading: false, summary: '', error: error.message }
   }
 }
 </script>
@@ -36,56 +56,63 @@ async function summarize(article) {
     <header class="demo-hero">
       <p class="kicker">Readaria / Public demo</p>
       <h1>Read less.<br><em>Understand more.</em></h1>
-      <p class="hero-copy">Explore pre-generated summaries and podcasts at zero API cost, or bring your own OpenAI-compatible key for a live summary.</p>
+      <p class="hero-copy">Real AI-generated podcasts and article summaries — zero API cost to explore, or bring your own OpenAI-compatible key.</p>
     </header>
 
-    <ByokPanel />
-
-    <section class="showcase" aria-labelledby="showcase-title">
+    <section v-if="podcasts.length" class="featured-podcast" aria-label="Featured podcast">
       <div class="section-heading">
-        <p class="kicker">Showcase mode</p>
-        <h2 id="showcase-title">A small, curated reading list</h2>
-        <p>These summaries and audio samples are seeded with the demo. Viewing them makes no AI API calls.</p>
+        <p class="kicker">Featured podcast</p>
+      </div>
+      <article v-for="podcast in podcasts" :key="podcast.share_token" class="podcast-card">
+        <h3>{{ podcast.title }}</h3>
+        <p v-if="podcastMeta(podcast)" class="podcast-meta">{{ podcastMeta(podcast) }}</p>
+        <RouterLink class="link-button" :to="`/podcast-preview/${podcast.share_token}`">
+          Listen to the podcast
+        </RouterLink>
+      </article>
+    </section>
+
+    <section class="featured-reading" aria-label="Featured reading">
+      <div class="section-heading">
+        <p class="kicker">Featured reading</p>
       </div>
 
-      <p v-if="loading" class="notice">Loading the reading list…</p>
+      <p v-if="loading" class="notice">Loading featured content…</p>
       <p v-else-if="loadError" class="notice error" role="alert">{{ loadError }}</p>
+      <p v-else-if="!podcasts.length && !articles.length" class="notice">
+        Content is being prepared — try the interactive mode below.
+      </p>
 
-      <article v-for="(article, index) in articles" :key="article.id" class="demo-article">
-        <div class="article-index">{{ String(index + 1).padStart(2, '0') }}</div>
-        <div class="article-body">
-          <a class="source-name" :href="article.url" target="_blank" rel="noopener noreferrer">{{ article.source.name }}</a>
-          <h3>{{ article.title }}</h3>
-          <p class="summary">{{ article.summary }}</p>
+      <article v-for="article in articles" :key="article.demo_id" class="featured-article">
+        <p class="source-name">{{ article.source_name }}</p>
+        <h3>{{ article.title }}</h3>
+        <p class="summary">{{ article.summary }}</p>
 
-          <audio
-            class="audio-player"
-            :src="`${demoApiBaseUrl}${article.podcast_audio_url}`"
-            controls
-            preload="none"
-            crossorigin="anonymous"
-          >
-            Your browser does not support audio playback.
-          </audio>
-
-          <div class="interactive-summary">
+        <div class="article-actions">
+          <RouterLink class="read-link" :to="`/demo/article/${article.demo_id}`">Read</RouterLink>
+          <div v-if="article.excerpt" class="interactive-summary">
             <button
               type="button"
-              :disabled="interactions[article.id]?.loading"
+              :disabled="interactions[article.demo_id]?.loading"
               @click="summarize(article)"
             >
-              {{ interactions[article.id]?.loading ? 'Generating…' : 'AI Summary' }}
+              {{ interactions[article.demo_id]?.loading ? 'Generating…' : 'AI Summary (your key)' }}
             </button>
-            <p v-if="interactions[article.id]?.summary" class="live-result">
-              <strong>Your live summary</strong>
-              {{ interactions[article.id].summary }}
-            </p>
-            <p v-if="interactions[article.id]?.error" class="error" role="alert">
-              {{ interactions[article.id].error }}
-            </p>
           </div>
         </div>
+        <p v-if="interactions[article.demo_id]?.summary" class="live-result">
+          <strong>Your live summary</strong>
+          {{ interactions[article.demo_id].summary }}
+        </p>
+        <p v-if="interactions[article.demo_id]?.error" class="error" role="alert">
+          {{ interactions[article.demo_id].error }}
+        </p>
       </article>
+    </section>
+
+    <section class="byok-section" aria-labelledby="try-byok-title">
+      <h2 id="try-byok-title">Try it with your own key</h2>
+      <ByokPanel />
     </section>
   </main>
 </template>
@@ -102,7 +129,7 @@ async function summarize(article) {
 
 .demo-hero {
   max-width: 720px;
-  margin-bottom: 38px;
+  margin-bottom: 56px;
 }
 
 .kicker {
@@ -136,87 +163,91 @@ h1 em {
   line-height: 1.75;
 }
 
-.showcase {
+.featured-reading,
+.byok-section {
   margin-top: 56px;
 }
 
 .section-heading {
-  padding-bottom: 22px;
+  padding-bottom: 12px;
   border-bottom: 2px solid var(--readaria-navy);
 }
 
-.section-heading h2 {
+.section-heading .kicker {
   margin: 0;
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: 30px;
-  font-weight: 400;
 }
 
-.section-heading > p:last-child {
-  margin: 10px 0 0;
-  color: rgba(27, 41, 58, 0.65);
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.demo-article {
-  display: grid;
-  grid-template-columns: 48px 1fr;
-  gap: 18px;
-  padding: 30px 0;
+.podcast-card,
+.featured-article {
+  padding: 28px 0;
   border-bottom: 1px solid rgba(27, 41, 58, 0.18);
 }
 
-.article-index {
-  padding-top: 4px;
-  color: var(--readaria-accent);
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: 20px;
-}
-
-.source-name {
-  color: rgba(27, 41, 58, 0.65);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.11em;
-  text-decoration: none;
-  text-transform: uppercase;
-}
-
 h3 {
-  margin: 8px 0 12px;
+  margin: 0 0 12px;
   font-family: Georgia, 'Times New Roman', serif;
   font-size: 26px;
   font-weight: 400;
   line-height: 1.2;
 }
 
+.podcast-meta {
+  margin: 0 0 20px;
+  color: rgba(27, 41, 58, 0.65);
+  font-size: 13px;
+}
+
+.link-button,
+.read-link {
+  color: var(--readaria-accent);
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.link-button {
+  display: inline-block;
+  padding: 10px 16px;
+  border: 1px solid var(--readaria-accent);
+  border-radius: 3px;
+}
+
+.source-name {
+  margin: 0 0 8px;
+  color: var(--readaria-accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
 .summary {
+  display: -webkit-box;
   margin: 0;
+  overflow: hidden;
   color: rgba(27, 41, 58, 0.78);
   font-size: 14px;
   line-height: 1.75;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
-.audio-player {
-  width: min(440px, 100%);
-  height: 36px;
+.article-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
   margin-top: 18px;
 }
 
-.interactive-summary {
-  margin-top: 16px;
-}
-
 .interactive-summary button {
-  padding: 9px 15px;
-  border: 1px solid var(--readaria-accent);
-  border-radius: 3px;
+  padding: 0;
+  border: 0;
   background: transparent;
-  color: var(--readaria-accent);
+  color: rgba(27, 41, 58, 0.62);
   font: inherit;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -226,7 +257,7 @@ h3 {
 }
 
 .live-result {
-  margin: 14px 0 0;
+  margin: 18px 0 0;
   padding: 14px 16px;
   border-left: 3px solid var(--readaria-accent);
   background: var(--readaria-accent-soft);
@@ -242,8 +273,19 @@ h3 {
   text-transform: uppercase;
 }
 
+.byok-section h2 {
+  margin: 0 0 18px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 24px;
+  font-weight: 400;
+}
+
 .notice {
+  margin: 0;
   padding: 24px 0;
+  color: rgba(27, 41, 58, 0.68);
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .error {
@@ -253,7 +295,9 @@ h3 {
 
 @media (max-width: 640px) {
   .demo-page { padding: 38px 18px 60px; }
-  .demo-article { grid-template-columns: 30px 1fr; gap: 10px; }
+  .demo-hero { margin-bottom: 42px; }
+  .featured-reading,
+  .byok-section { margin-top: 42px; }
   h3 { font-size: 23px; }
 }
 </style>

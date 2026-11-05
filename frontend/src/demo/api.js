@@ -16,6 +16,16 @@ export async function fetchDemoContent() {
   return parseResponse(response)
 }
 
+export async function fetchDemoArticles() {
+  const response = await fetch(`${demoApiBaseUrl}/api/demo/articles`)
+  return parseResponse(response)
+}
+
+export async function fetchDemoArticle(demoId) {
+  const response = await fetch(`${demoApiBaseUrl}/api/demo/articles/${encodeURIComponent(demoId)}`)
+  return parseResponse(response)
+}
+
 export async function createDemoSummary(article) {
   const { apiKey, baseUrl } = loadDemoCredentials()
   if (!apiKey) {

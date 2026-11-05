@@ -197,6 +197,12 @@ const router = createRouter({
       props: true
     },
     {
+      path: '/demo/article/:demo_id',
+      name: 'demo-article',
+      component: () => import('@/demo/DemoArticleView.vue'),
+      meta: { title: 'Readaria Demo', skipAuth: true, hideTabbar: true }
+    },
+    {
       path: '/privacy',
       name: 'privacy',
       component: () => import('@/views/PrivacyPolicyView.vue'),

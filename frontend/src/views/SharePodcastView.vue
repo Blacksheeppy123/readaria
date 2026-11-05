@@ -138,7 +138,7 @@ const goToApp = () => {
 }
 
 const goToRegister = () => {
-  router.push('/register')
+  window.open('https://github.com/Blacksheeppy123/readaria', '_blank', 'noopener')
 }
 
 const closeRegisterModal = () => {
@@ -278,23 +278,23 @@ const metaLabel = computed(() => {
         round
         block
         icon="play-circle-o"
-        @click="goToApp"
+        @click="goToRegister"
       >
-        {{ $t('sharePodcast.ctaButton') }}
+        {{ $t('sharePodcast.selfhostButton') }}
       </van-button>
     </div>
 
     <van-dialog
       v-model:show="showRegisterModal"
-      :title="$t('sharePodcast.modalTitle')"
+      :title="$t('sharePodcast.selfhostTitle')"
       show-cancel-button
-      :confirm-button-text="$t('sharePodcast.modalConfirm')"
+      :confirm-button-text="$t('sharePodcast.selfhostButton')"
       :cancel-button-text="$t('sharePodcast.modalCancel')"
       @confirm="goToRegister"
       @cancel="closeRegisterModal"
     >
       <div class="sp-modal-body">
-        <p>{{ $t('sharePodcast.modalBody') }}</p>
+        <p>{{ $t('sharePodcast.selfhostBody') }}</p>
       </div>
     </van-dialog>
   </div>
