@@ -169,12 +169,26 @@ async function mockOnboardingRegressionApis(page) {
     await route.fulfill({ json: { success: true, audio_url: '/mock/podcast.mp3' } })
   })
 
+  await page.route('**/api/v1/podcasts/501/progress**', async (route) => {
+    await route.fulfill({ json: { status: 'success' } })
+  })
+
   await page.route('**/mock/podcast.mp3', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'audio/mpeg',
-      body: ''
-    })
+    const sampleCount = 800
+    const wav = Buffer.alloc(44 + sampleCount * 2)
+    wav.write('RIFF', 0)
+    wav.writeUInt32LE(36 + sampleCount * 2, 4)
+    wav.write('WAVEfmt ', 8)
+    wav.writeUInt32LE(16, 16)
+    wav.writeUInt16LE(1, 20)
+    wav.writeUInt16LE(1, 22)
+    wav.writeUInt32LE(8000, 24)
+    wav.writeUInt32LE(16000, 28)
+    wav.writeUInt16LE(2, 32)
+    wav.writeUInt16LE(16, 34)
+    wav.write('data', 36)
+    wav.writeUInt32LE(sampleCount * 2, 40)
+    await route.fulfill({ status: 200, contentType: 'audio/wav', body: wav })
   })
 
   await page.route('**/api/v1/podcasts/501/conversations**', async (route) => {

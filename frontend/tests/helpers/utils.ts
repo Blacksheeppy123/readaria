@@ -12,6 +12,10 @@ type AuthSession = {
 const authSessions = new Map<string, Promise<AuthSession>>();
 
 async function getAuthSession(page: Page, username: string, password: string): Promise<AuthSession> {
+  if (username === 'test-user' && password === 'test1234' && process.env.E2E_AUTH_SESSION) {
+    return JSON.parse(process.env.E2E_AUTH_SESSION);
+  }
+
   const key = `${username}:${password}`;
   let session = authSessions.get(key);
   if (!session) {

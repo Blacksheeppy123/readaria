@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: 'tests/e2e',
+  globalSetup: './tests/global-setup.ts',
   timeout: 30_000,
   expect: { timeout: 5_000 },
   fullyParallel: true,
@@ -15,6 +16,7 @@ export default defineConfig({
   ],
   use: {
     baseURL: 'http://localhost:5173',
+    serviceWorkers: 'block',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: process.env.CI ? 'off' : 'retain-on-failure',  // CI 环境禁用视频

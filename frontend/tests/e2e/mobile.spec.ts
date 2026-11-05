@@ -84,7 +84,7 @@ async function openFeed(page: Page) {
 
 async function performPullToRefresh(page: Page) {
   await page.locator('.van-pull-refresh__track').evaluate((element) => {
-    const makeTouch = (clientY: number) => new Touch({
+    const makeTouch = (clientY: number) => ({
       identifier: 1,
       target: element,
       clientX: 100,
@@ -92,13 +92,13 @@ async function performPullToRefresh(page: Page) {
     });
     const dispatch = (type: string, clientY: number, ending = false) => {
       const touch = makeTouch(clientY);
-      element.dispatchEvent(new TouchEvent(type, {
-        bubbles: true,
-        cancelable: true,
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.assign(event, {
         touches: ending ? [] : [touch],
         targetTouches: ending ? [] : [touch],
         changedTouches: [touch],
-      }));
+      });
+      element.dispatchEvent(event);
     };
 
     dispatch('touchstart', 100);
