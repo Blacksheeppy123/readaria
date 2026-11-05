@@ -8,11 +8,19 @@ import { Page } from '@playwright/test';
  * 登录辅助函数
  */
 export async function login(page: Page, username = 'test-user', password = 'test1234') {
-  await page.goto('/');
+  await page.addInitScript((userId) => {
+    localStorage.setItem('locale', 'zh');
+    localStorage.setItem('readaria_cookie_consent', 'accepted');
+    localStorage.setItem('onboarding_state', 'onboarding_complete');
+    localStorage.setItem('onboarding_completed', JSON.stringify({ first_audio_played: true }));
+    localStorage.setItem('last_user_id', userId);
+  }, username);
+  await page.goto('/login');
   await page.getByPlaceholder('请输入用户名').fill(username);
   await page.getByPlaceholder('请输入密码').fill(password);
   await page.getByRole('button', { name: '登录' }).click();
-  await page.waitForURL('**/articles', { timeout: 10000 });
+  await page.waitForURL('**/feed', { timeout: 10000 });
+  await page.locator('.van-tabbar').waitFor({ state: 'visible' });
 }
 
 /**
