@@ -26,6 +26,7 @@ output/
 !frontend/index.html
 !frontend/public/offline.html
 !frontend/public/*.png
+!docs/screenshots/*.png
 
 build/
 develop-eggs/
