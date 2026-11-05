@@ -16,6 +16,18 @@ async function mockAuthApi(page) {
     await route.fulfill({ json: {} });
   });
 
+  await page.route('**/api/v1/playback-state', async (route) => {
+    await route.fulfill({ json: { playlist: [] } });
+  });
+
+  await page.route('**/api/v1/queue', async (route) => {
+    await route.fulfill({ json: { items: [] } });
+  });
+
+  await page.route('**/api/v1/podcasts', async (route) => {
+    await route.fulfill({ json: { podcasts: [] } });
+  });
+
   await page.route('**/api/auth/login', async (route) => {
     const body = route.request().postDataJSON();
     if (body.username === 'test-user' && body.password === 'test123') {
@@ -53,17 +65,21 @@ async function mockAuthApi(page) {
 
   await page.route('**/api/user/*/feeds/articles**', async (route) => {
     await route.fulfill({
-      json: [
-        {
-          id: 101,
-          title: 'Launch article',
-          url: 'https://example.com/articles/launch',
-          summary: 'A mocked article for auth smoke tests.',
-          content: 'Readable launch article body.',
-          source: 'https://example.com/feed.xml',
-          updated_at: new Date().toISOString(),
-        },
-      ],
+      json: {
+        articles: [
+          {
+            id: 101,
+            title: 'Launch article',
+            url: 'https://example.com/articles/launch',
+            summary: 'A mocked article for auth smoke tests.',
+            content: 'Readable launch article body.',
+            source: 'https://example.com/feed.xml',
+            updated_at: new Date().toISOString(),
+          },
+        ],
+        pagination: { total: 1, playable_total: 1 },
+        overview: {},
+      },
     });
   });
 }
@@ -129,8 +145,8 @@ test.describe('Auth flow', () => {
 
     await page.getByPlaceholder('Enter username').fill('new-user');
     await page.getByPlaceholder('Enter email').fill('new-user@example.com');
-    await page.getByPlaceholder('Create a password').fill('password123');
-    await page.getByPlaceholder('Confirm your password').fill('password123');
+    await page.getByPlaceholder(/Enter password \(min 8 chars/).fill('password123');
+    await page.getByPlaceholder('Enter password again').fill('password123');
     await page.getByRole('button', { name: 'Sign Up' }).click();
 
     await expect.poll(() => registerRequestBody).not.toBeNull();
@@ -142,7 +158,7 @@ test.describe('Auth flow', () => {
     });
 
     await page.waitForURL('**/onboarding/language');
-    await expect(page.getByRole('heading', { name: 'Choose your preferred language' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Choose Your Language' })).toBeVisible();
   });
 
   test('shows login failure feedback', async ({ page }) => {
