@@ -37,6 +37,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VITE_DEMO_MODE: ${VITE_DEMO_MODE:-false}
     restart: unless-stopped
     env_file:
       - .env

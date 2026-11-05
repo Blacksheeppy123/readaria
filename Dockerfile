@@ -1,6 +1,10 @@
 # ========== 阶段 1: 构建 Vue PWA ==========
 FROM node:20-alpine AS frontend-builder
 
+# VITE_DEMO_MODE=true 构建公开演示版前端（DemoView/BYOK 面板）；默认正常前端
+ARG VITE_DEMO_MODE=false
+ENV VITE_DEMO_MODE=$VITE_DEMO_MODE
+
 WORKDIR /app/frontend
 
 COPY frontend/package.json frontend/package-lock.json ./
