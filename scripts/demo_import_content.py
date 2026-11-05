@@ -194,7 +194,7 @@ def _ensure_global_article(cursor, article: dict[str, Any], feed_url: str) -> in
         "content": excerpt,
         "summary": article["summary"],
         "source_feed_url": feed_url,
-        "source_type_id": "blog",
+        "source_type_id": "rss",
         "language": language,
         "word_count": word_count,
         "reading_time": reading_time,
