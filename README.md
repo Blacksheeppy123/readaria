@@ -2,6 +2,8 @@
 
 Self-hosted, mobile-first RSS reading with text-to-speech and AI-generated podcasts, delivered as an installable PWA.
 
+**[Live demo](https://demo.readaria.com)** · Self-host with Docker below
+
 <p align="center">
   <img src="docs/screenshots/reading-desktop.png" alt="Readaria desktop reading layout with article list and AI summary" width="720">
 </p>
