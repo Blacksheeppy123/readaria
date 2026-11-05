@@ -138,7 +138,7 @@ test.describe('移动端响应式布局', () => {
     expect(box!.width).toBeLessThanOrEqual(390);
   });
 
-  test('应该支持触摸滚动', async ({ page }) => {
+  test('滚动容器应该支持程序化滚动', async ({ page }) => {
     await page.locator('.content').evaluate((element) => element.scrollTo(0, 600));
     await expect.poll(() => page.locator('.content').evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
     await expect(page.locator('.article-card').first()).toBeVisible();
