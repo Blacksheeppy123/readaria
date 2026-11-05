@@ -44,6 +44,8 @@ async function seedAuth(page: Page) {
 
 async function mockApis(page: Page) {
   await page.route('**/api/auth/me', route => route.fulfill({ json: USER }))
+  await page.route('**/api/v1/playback-state', route => route.fulfill({ json: { playlist: [] } }))
+  await page.route('**/api/v1/queue', route => route.fulfill({ json: { items: [] } }))
   await page.route('**/api/v1/subscription/me', route => route.fulfill({
     json: {
       plan: 'free', plan_name: 'Free', status: 'active',
