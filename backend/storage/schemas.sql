@@ -636,3 +636,16 @@ SELECT
     (SELECT MAX(a.published_at) FROM articles a WHERE a.feed_id = uf.id) AS latest_article_date
 FROM user_feeds uf
 JOIN source_types st ON uf.source_type_id = st.id;
+
+-- ========== Demo 精选内容注册表（公开演示内容，合成用户 demo-curator 名下） ==========
+CREATE TABLE IF NOT EXISTS demo_content_registry (
+    demo_id VARCHAR(64) PRIMARY KEY,
+    kind VARCHAR(16) NOT NULL CHECK (kind IN ('podcast', 'article')),
+    podcast_id INTEGER REFERENCES podcasts(id) ON DELETE CASCADE,
+    global_article_id INTEGER REFERENCES global_articles(id) ON DELETE CASCADE,
+    tts_audio_path VARCHAR(512),
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CHECK ((kind = 'podcast' AND podcast_id IS NOT NULL AND global_article_id IS NULL)
+        OR (kind = 'article' AND global_article_id IS NOT NULL AND podcast_id IS NULL))
+);

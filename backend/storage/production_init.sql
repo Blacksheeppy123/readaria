@@ -2285,6 +2285,19 @@ ALTER TABLE ONLY public.user_usage_daily
     ADD CONSTRAINT user_usage_daily_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
 
+-- ========== Demo 精选内容注册表（公开演示内容，合成用户 demo-curator 名下） ==========
+CREATE TABLE IF NOT EXISTS demo_content_registry (
+    demo_id VARCHAR(64) PRIMARY KEY,
+    kind VARCHAR(16) NOT NULL CHECK (kind IN ('podcast', 'article')),
+    podcast_id INTEGER REFERENCES podcasts(id) ON DELETE CASCADE,
+    global_article_id INTEGER REFERENCES global_articles(id) ON DELETE CASCADE,
+    tts_audio_path VARCHAR(512),
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CHECK ((kind = 'podcast' AND podcast_id IS NOT NULL AND global_article_id IS NULL)
+        OR (kind = 'article' AND global_article_id IS NOT NULL AND podcast_id IS NULL))
+);
+
 --
 -- Readaria schema initialization complete
 --
