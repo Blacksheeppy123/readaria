@@ -4,22 +4,48 @@
 
 import { Page } from '@playwright/test';
 
+type AuthSession = {
+  access_token: string;
+  user: Record<string, unknown>;
+};
+
+const authSessions = new Map<string, Promise<AuthSession>>();
+
+async function getAuthSession(page: Page, username: string, password: string): Promise<AuthSession> {
+  const key = `${username}:${password}`;
+  let session = authSessions.get(key);
+  if (!session) {
+    session = page.request.post('/api/auth/login', {
+      data: { username, password },
+    }).then(async (response) => {
+      if (!response.ok()) {
+        throw new Error(`E2E login failed (${response.status()}): ${await response.text()}`);
+      }
+      return response.json();
+    }).catch((error) => {
+      authSessions.delete(key);
+      throw error;
+    });
+    authSessions.set(key, session);
+  }
+  return session;
+}
+
 /**
- * 登录辅助函数
+ * 功能测试通过 API 复用登录态；登录表单本身由 auth.spec.ts 覆盖，避免触发限流。
  */
 export async function login(page: Page, username = 'test-user', password = 'test1234') {
-  await page.addInitScript((userId) => {
+  const session = await getAuthSession(page, username, password);
+  await page.addInitScript(({ auth, userId }) => {
+    localStorage.setItem('readaria_token', auth.access_token);
+    localStorage.setItem('readaria_user', JSON.stringify(auth.user));
     localStorage.setItem('locale', 'zh');
     localStorage.setItem('readaria_cookie_consent', 'accepted');
     localStorage.setItem('onboarding_state', 'onboarding_complete');
     localStorage.setItem('onboarding_completed', JSON.stringify({ first_audio_played: true }));
     localStorage.setItem('last_user_id', userId);
-  }, username);
-  await page.goto('/login');
-  await page.getByPlaceholder('请输入用户名').fill(username);
-  await page.getByPlaceholder('请输入密码').fill(password);
-  await page.getByRole('button', { name: '登录' }).click();
-  await page.waitForURL('**/feed', { timeout: 10000 });
+  }, { auth: session, userId: String(session.user.id || username) });
+  await page.goto('/feed');
   await page.locator('.van-tabbar').waitFor({ state: 'visible' });
 }
 
