@@ -64,6 +64,7 @@ COPY --chown=jasmine:jasmine backend backend
 COPY --from=frontend-builder --chown=jasmine:jasmine /app/frontend/dist backend/static/web
 COPY --chown=jasmine:jasmine core core
 COPY --chown=jasmine:jasmine manage.py manage.py
+COPY --chown=jasmine:jasmine scripts scripts
 
 # 切换到非 root 用户
 USER jasmine
