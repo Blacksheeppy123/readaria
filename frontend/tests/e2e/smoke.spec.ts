@@ -8,7 +8,7 @@ test.describe('App smoke', () => {
   test('loads launch landing page', async ({ page }) => {
     await page.goto('/');
 
-    await expect(page.getByRole('heading', { name: 'Turn your feed into a daily brief.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Turn your feeds into a daily personal podcast.' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Start Free' })).toBeVisible();
     await expect(page.getByText('12 new from trusted sources')).toBeVisible();
   });

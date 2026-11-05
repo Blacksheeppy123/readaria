@@ -28,6 +28,14 @@ async function mockLaunchApi(page) {
     await route.fulfill({ json: mockUser });
   });
 
+  await page.route('**/api/v1/playback-state', async (route) => {
+    await route.fulfill({ json: { playlist: [] } });
+  });
+
+  await page.route('**/api/v1/queue', async (route) => {
+    await route.fulfill({ json: { items: [] } });
+  });
+
   await page.route('**/user/*/feeds', async (route) => {
     await route.fulfill({
       json: [
@@ -42,7 +50,13 @@ async function mockLaunchApi(page) {
   });
 
   await page.route('**/api/user/*/feeds/articles**', async (route) => {
-    await route.fulfill({ json: [mockArticle] });
+    await route.fulfill({
+      json: {
+        articles: [mockArticle],
+        pagination: { total: 1, playable_total: 1 },
+        overview: {},
+      },
+    });
   });
 
   await page.route('**/api/articles/by-url**', async (route) => {
@@ -80,15 +94,28 @@ async function mockLaunchApi(page) {
     await route.fulfill({ json: { final_ready: true, first_playable_ready: true, status: 'ready' } });
   });
 
-  // Mock TTS play endpoint: return a minimal valid MP3 (1 silent frame)
+  // Mock the signed-URL handoff, then serve the resulting audio from the existing mock endpoint.
+  await page.route('**/api/v1/tts/play-url/*', async (route) => {
+    await route.fulfill({ json: { audio_url: '/api/v1/tts/play/101' } });
+  });
+
+  // Serve 100 ms of valid PCM silence so browser playback works without an external TTS service.
   await page.route('**/api/v1/tts/play/*', async (route) => {
-    const mp3Base64 = 'SUQzBAAAAAAAAP/7kAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
-    const mp3Buffer = Buffer.from(mp3Base64, 'base64');
-    await route.fulfill({
-      status: 200,
-      contentType: 'audio/mpeg',
-      body: mp3Buffer,
-    });
+    const sampleCount = 800;
+    const wav = Buffer.alloc(44 + sampleCount * 2);
+    wav.write('RIFF', 0);
+    wav.writeUInt32LE(36 + sampleCount * 2, 4);
+    wav.write('WAVEfmt ', 8);
+    wav.writeUInt32LE(16, 16);
+    wav.writeUInt16LE(1, 20);
+    wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(8000, 24);
+    wav.writeUInt32LE(16000, 28);
+    wav.writeUInt16LE(2, 32);
+    wav.writeUInt16LE(16, 34);
+    wav.write('data', 36);
+    wav.writeUInt32LE(sampleCount * 2, 40);
+    await route.fulfill({ status: 200, contentType: 'audio/wav', body: wav });
   });
 }
 
@@ -98,6 +125,8 @@ async function seedAuth(page) {
     localStorage.setItem('readaria_user', JSON.stringify(user));
     localStorage.setItem('locale', 'en');
     localStorage.setItem('readaria_cookie_consent', 'accepted');
+    localStorage.setItem('onboarding_state', 'onboarding_complete');
+    localStorage.setItem('onboarding_completed', JSON.stringify({ first_audio_played: true }));
     localStorage.setItem('tts_playlist', JSON.stringify([article]));
     localStorage.setItem('tts_current_index', '0');
     localStorage.setItem(
@@ -122,9 +151,9 @@ test.describe('Launch UI critical flow', () => {
     await page.goto('/feed');
 
     await expect(page.getByText('Featured')).toBeVisible();
-    await expect(page.getByText('1 new · 1 ready to listen')).toBeVisible();
+    await expect(page.locator('.feed-overview h2')).toHaveText('1 new articles ready to listen');
     await expect(page.getByRole('button', { name: 'Playable' })).toBeVisible();
-    await expect(page.getByText(mockArticle.title)).toBeVisible();
+    await expect(page.locator('.featured-title')).toHaveText(mockArticle.title);
 
     await page.getByRole('button', { name: "Generate today's podcast" }).click();
     await expect(page).toHaveURL(/\/listen/);
@@ -142,7 +171,7 @@ test.describe('Launch UI critical flow', () => {
     await expect(page).toHaveURL(/\/article\//);
     await expect(page.getByRole('heading', { name: mockArticle.title })).toBeVisible();
     await expect(page.getByText('This is the original article body used for the launch UI bridge test.')).toBeVisible();
-    await expect(page.getByText('Back to player')).toBeVisible();
+    await expect(page.locator('.mini-player-bar .mini-player-title')).toHaveText(mockArticle.title);
     await expect(page.locator('.action-bar')).toHaveCount(0);
 
     // Regression: mini-player must have interactive controls, not a static bar
@@ -155,10 +184,16 @@ test.describe('Launch UI critical flow', () => {
   });
 
   test('article detail TTS mini-player shows interactive controls on playback', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.removeItem('tts_playlist');
+      localStorage.removeItem('tts_current_index');
+      localStorage.removeItem('tts_progress');
+    });
+
     // Go to feed and open the article detail page
     await page.goto('/feed');
-    await expect(page.getByText(mockArticle.title)).toBeVisible();
-    await page.getByText(mockArticle.title).click();
+    await expect(page.locator('.featured-title')).toHaveText(mockArticle.title);
+    await page.locator('.featured-article').click();
     await expect(page).toHaveURL(/\/article\//);
 
     // Click "Listen to this article" to trigger TTS
