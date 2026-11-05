@@ -43,6 +43,7 @@ The complete example is in [`.env.example`](../.env.example). Restart or recreat
 | `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB` | PostgreSQL connection and database name |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | PostgreSQL credentials; use a unique password |
 | `POSTGRES_SSLMODE` | PostgreSQL SSL mode; adjust for your network and database setup |
+| `API_PORT` | Host port mapped to the API container (default `8000`); change it if the port is already in use |
 | `REDIS_HOST`, `REDIS_PORT`, `REDIS_DB` | Redis connection |
 | `REDIS_PASSWORD` | Redis password, if enabled |
 | `SECRET_KEY` | Application signing secret; must be at least 32 characters |
@@ -152,6 +153,7 @@ docker compose exec redis redis-cli ping
 Common checks:
 
 - **API fails during configuration loading:** confirm `.env` exists, required values are present, and `SECRET_KEY` is at least 32 characters.
+- **Port already allocated:** set `API_PORT` in `.env` to a free host port, then recreate the API service. Compose override files cannot reliably replace the `ports` list across Compose versions.
 - **Authentication fails after a secret change:** changing token/signing secrets can invalidate existing sessions; sign in again.
 - **Feeds do not update:** inspect API logs, verify outbound network access, and test the feed URL directly. RSSHub routes may be unavailable independently of Readaria.
 - **AI summaries or podcasts fail:** verify model availability, credentials, provider quotas, and TTS configuration. Podcast generation needs both services.
