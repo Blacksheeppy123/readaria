@@ -102,25 +102,52 @@ def test_demo_settings_default_to_disabled():
     assert settings.demo_daily_interaction_limit == 3
 
 
-async def test_demo_content_returns_pre_generated_public_articles():
+async def test_demo_content_returns_curated_public_content():
     app, _ = _demo_app()
+    registry_content = {
+        "podcasts": [
+            {
+                "share_token": "demo-demo-podcast-zh",
+                "title": "Demo podcast",
+                "duration": 491,
+                "created_at": "2026-11-05T08:00:00+00:00",
+            }
+        ],
+        "articles": [
+            {
+                "demo_id": "demo-article-01",
+                "title": "A real article",
+                "author": "Demo Author",
+                "source_name": "Demo Source",
+                "published_at": "2026-11-04T08:00:00+00:00",
+                "language": "zh",
+                "summary": "A concise summary.",
+                "excerpt": "The article excerpt.",
+                "original_url": "https://example.com/articles/1",
+                "audio_url": None,
+            }
+        ],
+    }
 
-    response = await _get(app, "/api/demo/content")
+    with patch(
+        "backend.api.routes.demo._load_registry",
+        return_value=registry_content,
+        create=True,
+    ):
+        response = await _get(app, "/api/demo/content")
 
     assert response.status_code == 200
-    articles = response.json()["articles"]
-    assert 5 <= len(articles) <= 8
-    assert len({article["source"]["name"] for article in articles}) == len(articles)
-    for article in articles:
-        assert article["id"]
-        assert article["title"]
-        assert article["url"].startswith("https://")
-        assert article["source"]["name"]
-        assert article["source"]["feed_url"].startswith("https://")
-        assert article["summary"]
-        assert article["podcast_audio_url"].startswith("/static/demo/")
-        assert article["content"]
-        assert "wechat" not in article["source"]["feed_url"].lower()
+    body = response.json()
+    assert body["podcasts"] == registry_content["podcasts"]
+    assert body["articles"] == [
+        {
+            "demo_id": "demo-article-01",
+            "title": "A real article",
+            "source_name": "Demo Source",
+            "summary": "A concise summary.",
+            "excerpt": "The article excerpt.",
+        }
+    ]
 
 
 async def test_demo_summary_requires_byok_key():

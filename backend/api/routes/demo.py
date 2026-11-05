@@ -1,13 +1,15 @@
-"""Opt-in, zero-database demo routes.
+"""Opt-in public demo routes with database-backed curated content.
 
 The visitor's BYOK credential is deliberately scoped to the summary request. It
 must never be logged, included in error responses, or persisted.
 """
 
+from contextlib import closing
 from datetime import datetime, timezone
 from dataclasses import dataclass
 import ipaddress
 import logging
+from pathlib import Path
 import socket
 from typing import Optional
 from urllib.parse import urlparse
@@ -18,6 +20,8 @@ from httpcore._backends.sync import SyncBackend
 from openai import OpenAI
 from pydantic import BaseModel, Field, model_validator
 import httpx
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 from backend.nlp.openai_client import _build_completion_params
 
@@ -73,77 +77,79 @@ def _create_pinned_http_client(validated_url: _PublicURL, timeout: float) -> htt
     )
 
 
-DEMO_ARTICLES = [
-    {
-        "id": "hacker-news",
-        "title": "Hacker News: Community-curated technology",
-        "url": "https://news.ycombinator.com/",
-        "source": {
-            "name": "Hacker News",
-            "feed_url": "https://hnrss.org/frontpage",
-        },
-        "summary": "A seeded preview of Readaria's AI summary: Hacker News surfaces community-selected stories about software, startups, science, and technology culture.",
-        "podcast_audio_url": "/static/demo/readaria-demo-en.mp3",
-        "content": "Hacker News is a social news website focusing on computer science and entrepreneurship. Its community shares and discusses technology, science, and startup stories.",
-    },
-    {
-        "id": "sspai",
-        "title": "少数派：高效工作与数字生活",
-        "url": "https://sspai.com/",
-        "source": {"name": "少数派", "feed_url": "https://sspai.com/feed"},
-        "summary": "这是预生成的演示摘要：少数派关注数字工具、效率方法与消费科技，帮助读者更好地选择和使用技术产品。",
-        "podcast_audio_url": "/static/demo/readaria-demo-zh.mp3",
-        "content": "少数派是一个关注数字生活与工作效率的中文内容平台，文章涵盖应用技巧、设备体验、自动化和生活方式。",
-    },
-    {
-        "id": "ruanyifeng",
-        "title": "阮一峰的网络日志：技术周刊",
-        "url": "https://www.ruanyifeng.com/blog/",
-        "source": {
-            "name": "阮一峰的网络日志",
-            "feed_url": "https://www.ruanyifeng.com/blog/atom.xml",
-        },
-        "summary": "这是预生成的演示摘要：技术周刊汇集软件开发、互联网趋势与科技评论，为读者提供每周技术动态。",
-        "podcast_audio_url": "/static/demo/readaria-demo-zh.mp3",
-        "content": "阮一峰的网络日志长期分享编程教程、互联网评论和每周科技动态，技术周刊整理一周值得关注的技术文章与工具。",
-    },
-    {
-        "id": "solidot",
-        "title": "Solidot: Technology and open-source news",
-        "url": "https://www.solidot.org/",
-        "source": {
-            "name": "Solidot",
-            "feed_url": "https://www.solidot.org/index.rss",
-        },
-        "summary": "A seeded preview of Readaria's AI summary: Solidot covers open-source software, science, security, and developments across the technology industry.",
-        "podcast_audio_url": "/static/demo/readaria-demo-en.mp3",
-        "content": "Solidot is a Chinese-language technology news site covering open source, science, security, and the wider computing industry.",
-    },
-    {
-        "id": "ars-technica",
-        "title": "Ars Technica: In-depth technology reporting",
-        "url": "https://arstechnica.com/",
-        "source": {
-            "name": "Ars Technica",
-            "feed_url": "https://feeds.arstechnica.com/arstechnica/index",
-        },
-        "summary": "A seeded preview of Readaria's AI summary: Ars Technica provides detailed reporting and analysis on computing, science, policy, and gaming.",
-        "podcast_audio_url": "/static/demo/readaria-demo-en.mp3",
-        "content": "Ars Technica publishes technology news, long-form analysis, reviews, and reporting on science, IT, public policy, and gaming.",
-    },
-    {
-        "id": "mit-technology-review",
-        "title": "MIT Technology Review: Emerging technology",
-        "url": "https://www.technologyreview.com/",
-        "source": {
-            "name": "MIT Technology Review",
-            "feed_url": "https://www.technologyreview.com/feed/",
-        },
-        "summary": "A seeded preview of Readaria's AI summary: MIT Technology Review examines emerging technologies and their effects on business, science, and society.",
-        "podcast_audio_url": "/static/demo/readaria-demo-en.mp3",
-        "content": "MIT Technology Review reports on emerging technologies including artificial intelligence, biotechnology, climate technology, and computing, with attention to their social impact.",
-    },
-]
+_DEMO_CURATOR_ID = "00000000-0000-0000-0000-00000000d3m0"
+
+
+def _create_demo_connection(settings):
+    return psycopg2.connect(**settings.postgres_config)
+
+
+def _load_registry(settings):
+    """Load public demo fields only; internal feed/user data stays in the DB."""
+    with closing(_create_demo_connection(settings)) as connection:
+        with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                """
+                SELECT p.share_token, p.title, p.duration, p.created_at
+                FROM demo_content_registry r
+                JOIN podcasts p ON p.id = r.podcast_id
+                WHERE r.kind = 'podcast'
+                ORDER BY r.sort_order, r.created_at, r.demo_id
+                """
+            )
+            podcasts = [dict(row) for row in cursor.fetchall()]
+            cursor.execute(
+                """
+                SELECT
+                    r.demo_id,
+                    ga.title,
+                    ga.author,
+                    ga.published_at,
+                    ga.language,
+                    ga.url AS original_url,
+                    ga.content AS excerpt,
+                    r.tts_audio_path,
+                    (
+                        SELECT uf.feed_name
+                        FROM user_article_refs uar
+                        JOIN user_feeds uf ON uf.id = uar.feed_id
+                        WHERE uar.user_id = %s
+                          AND uar.global_article_id = ga.id
+                        ORDER BY uar.id
+                        LIMIT 1
+                    ) AS source_name,
+                    COALESCE(
+                        (
+                            SELECT s.summary
+                            FROM article_summaries s
+                            WHERE s.global_article_id = ga.id
+                            ORDER BY s.generated_at DESC, s.id DESC
+                            LIMIT 1
+                        ),
+                        ga.summary
+                    ) AS summary
+                FROM demo_content_registry r
+                JOIN global_articles ga ON ga.id = r.global_article_id
+                WHERE r.kind = 'article'
+                ORDER BY r.sort_order, r.created_at, r.demo_id
+                """,
+                (_DEMO_CURATOR_ID,),
+            )
+            articles = [dict(row) for row in cursor.fetchall()]
+
+    for article in articles:
+        tts_audio_path = article.pop("tts_audio_path")
+        article["audio_url"] = (
+            f"/static/demo/audio/{Path(tts_audio_path).name}" if tts_audio_path else None
+        )
+    return {"podcasts": podcasts, "articles": articles}
+
+
+def _article_list_item(article):
+    return {
+        key: article.get(key)
+        for key in ("demo_id", "title", "source_name", "summary", "excerpt")
+    }
 
 
 class DemoSummaryRequest(BaseModel):
@@ -235,7 +241,26 @@ def create_demo_router(settings, redis_client) -> APIRouter:
 
     @router.get("/content")
     def get_demo_content():
-        return {"articles": DEMO_ARTICLES, "audio_note": "Short seeded demo audio files; no API calls are made in showcase mode."}
+        content = _load_registry(settings)
+        return {
+            "podcasts": content["podcasts"],
+            "articles": [_article_list_item(article) for article in content["articles"]],
+        }
+
+    @router.get("/articles")
+    def get_demo_articles():
+        content = _load_registry(settings)
+        return {"articles": [_article_list_item(article) for article in content["articles"]]}
+
+    @router.get("/articles/{demo_id}")
+    def get_demo_article(demo_id: str):
+        content = _load_registry(settings)
+        article = next(
+            (item for item in content["articles"] if item["demo_id"] == demo_id), None
+        )
+        if article is None:
+            raise HTTPException(status_code=404, detail="Demo article not found")
+        return article
 
     @router.post("/summary")
     def create_demo_summary(
@@ -331,4 +356,4 @@ def create_demo_router(settings, redis_client) -> APIRouter:
     return router
 
 
-__all__ = ["create_demo_router", "DEMO_ARTICLES"]
+__all__ = ["create_demo_router"]
