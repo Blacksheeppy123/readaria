@@ -2,7 +2,14 @@
 
 Self-hosted, mobile-first RSS reading with text-to-speech and AI-generated podcasts, delivered as an installable PWA.
 
-<!-- screenshots: added before launch -->
+<p align="center">
+  <img src="docs/screenshots/reading-desktop.png" alt="Readaria desktop reading layout with article list and AI summary" width="720">
+</p>
+<p align="center">
+  <img src="docs/screenshots/feed-mobile.png" alt="Readaria mobile feed timeline" width="240">
+  <img src="docs/screenshots/article-mobile.png" alt="Readaria mobile article view with AI summary and listen button" width="240">
+  <img src="docs/screenshots/demo-showcase.png" alt="Readaria public demo with pre-generated AI podcasts" width="240">
+</p>
 
 ## Features
 
