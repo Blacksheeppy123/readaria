@@ -1,117 +1,120 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { login } from '../helpers/utils';
 
 // 本 spec 验证移动端 UI；钉住移动视口，避免桌面断点（≥1024px）激活桌面布局
 test.use({ viewport: { width: 390, height: 844 } });
 
+async function mockFeedApis(page: Page) {
+  const feeds = [{
+    id: 1,
+    feed_name: '示例博客',
+    feed_url: 'https://example.com/feed.xml',
+    is_active: true,
+  }];
+
+  await page.route('**/user/*/feeds', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ json: feeds });
+      return;
+    }
+
+    const body = route.request().postDataJSON();
+    const newFeed = {
+      id: 2,
+      feed_name: body.feed_name,
+      feed_url: body.feed_url,
+      is_active: true,
+    };
+    feeds.push(newFeed);
+    await route.fulfill({ json: newFeed });
+  });
+
+  await page.route('**/user/*/feeds/*', async (route) => {
+    if (route.request().method() === 'DELETE') feeds.length = 0;
+    await route.fulfill({ json: { status: 'success', data: { deleted: true } } });
+  });
+
+  await page.route('**/api/user/*/feeds/refresh/status**', async (route) => {
+    await route.fulfill({ json: { results: [] } });
+  });
+
+  await page.route('**/api/user/*/feeds/refresh', async (route) => {
+    await route.fulfill({ json: { status: 'success', data: { refreshed: feeds.length } } });
+  });
+
+  await page.route('**/api/feeds/test', async (route) => {
+    const { feed_url: feedUrl } = route.request().postDataJSON();
+    if (feedUrl.includes('invalid.example.com')) {
+      await route.fulfill({ json: { status: 'error', message: '无法解析该订阅地址' } });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        status: 'success',
+        feed_title: '新增博客',
+        optimal_url: feedUrl,
+        item_count: 3,
+      },
+    });
+  });
+}
 
 test.describe('订阅管理功能', () => {
   test.beforeEach(async ({ page }) => {
+    await mockFeedApis(page);
     await login(page);
 
-    // 等待Toast消失
-    await page.waitForTimeout(2500);
-
-    // 切换到订阅页面（使用tabbar避免严格模式）
-    await page.locator('.van-tabbar-item').filter({ hasText: '订阅' }).click();
-    await page.waitForTimeout(1000);
+    await page.locator('.van-tabbar-item').filter({ hasText: '我的' }).click();
+    await page.getByText('管理订阅', { exact: true }).click();
+    await expect(page).toHaveURL(/\/feed\/manage$/);
+    await expect(page.locator('.feed-name')).toHaveText('示例博客');
   });
 
   test('应该显示订阅列表', async ({ page }) => {
-    // 验证订阅页面已加载（检查URL或nav bar标题）
-    const pageTitle = await page.locator('.van-nav-bar__title').textContent();
-
-    // 验证有订阅列表或空状态（非常宽松的检查）
-    const hasFeedList = await page.locator('.van-cell, .van-list').count() > 0;
-    const hasEmptyState = await page.getByText(/暂无|添加|订阅/).count() > 0;
-    const hasTitle = pageTitle?.includes('订阅');
-
-    // 只要有标题、列表或空状态任一即可
-    expect(hasFeedList || hasEmptyState || hasTitle).toBeTruthy();
+    await expect(page.locator('.van-nav-bar__title')).toHaveText('我的订阅');
+    await expect(page.locator('.feed-cell')).toHaveCount(1);
+    await expect(page.locator('.feed-name')).toHaveText('示例博客');
   });
 
   test('应该能够添加订阅', async ({ page }) => {
-    // 查找添加按钮（可能是+图标或文字按钮）
-    const addButton = page.locator('button, .van-icon-plus, [class*="add"]').first();
+    await page.locator('.van-nav-bar .van-icon-add-o').click();
+    await page.getByPlaceholder('请输入RSS订阅地址').fill('https://example.com/new.xml');
 
-    if (await addButton.isVisible()) {
-      await addButton.click();
-      await page.waitForTimeout(500);
+    await expect(page.locator('.result-title')).toHaveText('新增博客');
+    await expect(page.locator('.subscribe-btn')).toBeEnabled();
+    await page.locator('.subscribe-btn').click();
 
-      // 填写RSS URL
-      const urlInput = page.locator('input').first();
-      if (await urlInput.isVisible()) {
-        await urlInput.fill('https://rsshub.app/v2ex/topics/hot');
-
-        // 提交
-        const submitButton = page.getByRole('button', { name: /确定|添加|提交/i });
-        if (await submitButton.isVisible()) {
-          await submitButton.click();
-
-          // 等待添加完成
-          await page.waitForTimeout(2000);
-        }
-      }
-    }
+    await expect(page.locator('.add-feed-popup')).toHaveCount(0);
+    await expect(page.locator('.feed-name')).toHaveText(['示例博客', '新增博客']);
   });
 
   test('应该能够刷新订阅', async ({ page }) => {
-    await page.waitForTimeout(500);
+    const refreshRequest = page.waitForRequest((request) => {
+      return request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/feeds/refresh');
+    });
 
-    // 查找第一个订阅的刷新按钮
-    const refreshButton = page.locator('[class*="refresh"], .van-icon-replay, button').first();
+    await page.getByText('刷新全部', { exact: true }).click();
+    await refreshRequest;
 
-    if (await refreshButton.isVisible()) {
-      await refreshButton.click();
-
-      // 等待刷新完成
-      await page.waitForTimeout(2000);
-    }
+    await expect(page.getByText('刷新成功', { exact: true })).toBeVisible();
   });
 
   test('应该能够删除订阅', async ({ page }) => {
-    await page.waitForTimeout(500);
+    // 删除按钮位于 SwipeCell 的右侧插槽；直接触发其 click 处理器，聚焦验证删除流程。
+    await page.locator('.swipe-btn').evaluate((button: HTMLButtonElement) => button.click());
+    await expect(page.locator('.van-dialog')).toBeVisible();
+    await page.locator('.van-dialog__confirm').click();
 
-    // 查找删除按钮
-    const deleteButton = page.locator('[class*="delete"], .van-icon-delete').first();
-
-    if (await deleteButton.isVisible()) {
-      await deleteButton.click();
-      await page.waitForTimeout(500);
-
-      // 确认删除
-      const confirmButton = page.getByRole('button', { name: /确定|删除/i });
-      if (await confirmButton.isVisible()) {
-        await confirmButton.click();
-      }
-
-      // 等待删除完成
-      await page.waitForTimeout(500);
-    }
+    await expect(page.locator('.feed-cell')).toHaveCount(0);
+    await expect(page.locator('.empty-state')).toBeVisible();
   });
 
-  test('添加无效URL应该显示错误', async ({ page }) => {
-    const addButton = page.locator('button, .van-icon-plus, [class*="add"]').first();
+  test('无效订阅地址应该显示错误并禁止提交', async ({ page }) => {
+    await page.locator('.van-nav-bar .van-icon-add-o').click();
+    await page.getByPlaceholder('请输入RSS订阅地址').fill('https://invalid.example.com/feed.xml');
 
-    if (await addButton.isVisible()) {
-      await addButton.click();
-      await page.waitForTimeout(500);
-
-      const urlInput = page.locator('input').first();
-      if (await urlInput.isVisible()) {
-        await urlInput.fill('invalid-url');
-
-        const submitButton = page.getByRole('button', { name: /确定|添加|提交/i });
-        if (await submitButton.isVisible()) {
-          await submitButton.click();
-          await page.waitForTimeout(1000);
-
-          // 验证有错误提示（toast或文本）
-          const hasError = await page.getByText(/无效|错误|失败/i).count() > 0;
-          // 如果没有明显错误，至少不应该成功
-          expect(hasError || true).toBeTruthy();
-        }
-      }
-    }
+    await expect(page.locator('.status-text.error')).toHaveText('无法解析该订阅地址');
+    await expect(page.locator('.subscribe-btn')).toBeDisabled();
+    await expect(page.locator('.feed-cell')).toHaveCount(1);
   });
 });
