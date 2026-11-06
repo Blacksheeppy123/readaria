@@ -6,6 +6,8 @@ import time
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
+from backend.utils.language_detect import detect_content_language
+
 class NLPProcessor:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
@@ -60,7 +62,13 @@ class NLPProcessor:
         return entities
         
     def generate_summary(self, text: str, max_length: int = 150, language: str = 'en') -> str:
-        """生成摘要"""
+        """生成摘要
+
+        摘要使用文章内容的语言生成；传入的 language 参数（通常为 UI 偏好语言）
+        仅在内容语言检测失败时作为 fallback。
+        """
+        # 以文章内容语言为准，UI 偏好语言仅作检测失败时的 fallback
+        language = detect_content_language(text, fallback=language)
         self.logger.info(f"开始生成摘要... (language={language})")
         start_time = time.time()
 

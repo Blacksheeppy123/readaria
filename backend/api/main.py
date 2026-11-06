@@ -1672,7 +1672,7 @@ async def get_user_feed_articles(
             if not es_results:
                 # PG 模糊兜底，限定用户范围
                 articles = db_manager.search_user_articles_pg(
-                    user_id, search, limit=size, offset=offset
+                    user_id, search, limit=size, offset=offset, language=user_language
                 )
                 total = len(articles)
             else:

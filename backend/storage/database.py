@@ -445,8 +445,13 @@ class DatabaseManager:
                     FROM global_articles ga
                     JOIN user_article_refs uar ON uar.global_article_id = ga.id
                     JOIN user_feeds f ON f.id = uar.feed_id
-                    LEFT JOIN article_summaries as_lang
-                      ON as_lang.global_article_id = ga.id AND as_lang.language = %s
+                    LEFT JOIN LATERAL (
+                        SELECT s.summary
+                        FROM article_summaries s
+                        WHERE s.global_article_id = ga.id
+                        ORDER BY (s.language = %s) DESC, s.updated_at DESC
+                        LIMIT 1
+                    ) as_lang ON true
                     WHERE f.user_id = %s
                       AND to_tsvector(
                             'simple',
@@ -629,8 +634,13 @@ class DatabaseManager:
                         ga.last_updated_at AS updated_at
                     FROM global_articles ga
                     JOIN user_article_refs uar ON uar.global_article_id = ga.id
-                    LEFT JOIN article_summaries as_lang
-                      ON as_lang.global_article_id = ga.id AND as_lang.language = %s
+                    LEFT JOIN LATERAL (
+                        SELECT s.summary
+                        FROM article_summaries s
+                        WHERE s.global_article_id = ga.id
+                        ORDER BY (s.language = %s) DESC, s.updated_at DESC
+                        LIMIT 1
+                    ) as_lang ON true
                     WHERE ga.url = %s AND uar.user_id = %s
                     LIMIT 1
                     """,
@@ -691,8 +701,13 @@ class DatabaseManager:
                         uar.global_article_id
                     FROM user_article_refs uar
                     JOIN global_articles ga ON ga.id = uar.global_article_id
-                    LEFT JOIN article_summaries as_lang
-                      ON as_lang.global_article_id = ga.id AND as_lang.language = %s
+                    LEFT JOIN LATERAL (
+                        SELECT s.summary
+                        FROM article_summaries s
+                        WHERE s.global_article_id = ga.id
+                        ORDER BY (s.language = %s) DESC, s.updated_at DESC
+                        LIMIT 1
+                    ) as_lang ON true
                     WHERE uar.global_article_id = %s AND uar.user_id = %s
                     LIMIT 1
                     """,
@@ -778,6 +793,9 @@ class DatabaseManager:
                     return None
 
                 localized_summary = self.get_article_summary(article_id, language)
+                if not localized_summary:
+                    # 摘要按内容语言缓存，未命中用户语言时回退到最近生成的内容语言摘要
+                    localized_summary = self.get_latest_article_summary(article_id)
                 if localized_summary:
                     article["summary"] = localized_summary
 
@@ -921,6 +939,36 @@ class DatabaseManager:
                 return result[0] if result else None
         except Exception as e:
             self.logger.error(f"查询文章摘要缓存失败: global_id={global_article_id}, lang={language}, error={e}")
+            return None
+
+    def delete_article_summaries_except(self, global_article_id: int, keep_language: str) -> int:
+        """删除指定文章除保留语言外的全部摘要缓存，返回删除条数（用于存量脏缓存清理）"""
+        try:
+            with self.pg_conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM article_summaries WHERE global_article_id = %s AND language <> %s",
+                    (global_article_id, keep_language),
+                )
+                deleted = cur.rowcount
+                self.pg_conn.commit()
+                return deleted
+        except Exception as e:
+            self.pg_conn.rollback()
+            self.logger.error(f"清理文章摘要缓存失败: global_id={global_article_id}, error={e}")
+            return 0
+
+    def get_latest_article_summary(self, global_article_id: int) -> Optional[str]:
+        """获取文章最近生成的任意语言摘要（用于用户语言未命中时的回退）"""
+        try:
+            with self.pg_conn.cursor() as cur:
+                cur.execute(
+                    "SELECT summary FROM article_summaries WHERE global_article_id = %s ORDER BY updated_at DESC LIMIT 1",
+                    (global_article_id,)
+                )
+                result = cur.fetchone()
+                return result[0] if result else None
+        except Exception as e:
+            self.logger.error(f"查询文章最新摘要失败: global_id={global_article_id}, error={e}")
             return None
 
     def upsert_article_summary(self, global_article_id: int, language: str, summary: str) -> None:
@@ -2622,7 +2670,11 @@ class DatabaseManager:
                 query = (
                     f"SELECT {fields} FROM user_article_refs uar "
                     "JOIN global_articles ga ON ga.id = uar.global_article_id "
-                    "LEFT JOIN article_summaries as_lang ON as_lang.global_article_id = ga.id AND as_lang.language = %s "
+                    "LEFT JOIN LATERAL ("
+                    "SELECT s.summary FROM article_summaries s "
+                    "WHERE s.global_article_id = ga.id "
+                    "ORDER BY (s.language = %s) DESC, s.updated_at DESC LIMIT 1"
+                    ") as_lang ON true "
                     "LEFT JOIN user_reading_history urh ON urh.global_article_id = ga.id AND urh.user_id = %s "
                     "WHERE uar.user_id = %s"
                 )
@@ -2733,7 +2785,11 @@ class DatabaseManager:
                     "THEN ga.id END) AS playable_total "
                     "FROM user_article_refs uar "
                     "JOIN global_articles ga ON ga.id = uar.global_article_id "
-                    "LEFT JOIN article_summaries as_lang ON as_lang.global_article_id = ga.id AND as_lang.language = %s "
+                    "LEFT JOIN LATERAL ("
+                    "SELECT s.summary FROM article_summaries s "
+                    "WHERE s.global_article_id = ga.id "
+                    "ORDER BY (s.language = %s) DESC, s.updated_at DESC LIMIT 1"
+                    ") as_lang ON true "
                     "LEFT JOIN user_reading_history urh ON urh.global_article_id = ga.id AND urh.user_id = %s "
                     "WHERE uar.user_id = %s"
                 )

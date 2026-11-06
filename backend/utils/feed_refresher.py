@@ -8,6 +8,7 @@ from datetime import datetime
 
 from backend.utils.whitelist import is_feature_whitelist_user
 from backend.utils.url import normalize_url
+from backend.utils.language_detect import detect_content_language, summary_matches_language
 from core.config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -141,11 +142,35 @@ class FeedRefresher:
                         # 1. 先存储文章（获取 global_article_id 用于摘要缓存）
                         global_article_id, legacy_article_id, is_new = self.db_manager.store_article(article)
 
-                        # 2. 获取用户语言偏好
+                        # 2. 获取用户语言偏好（仅作内容语言检测失败时的 fallback）
                         user_language = self.db_manager.get_user_language(feed_user_id)
 
+                        # 2.1 检测文章内容语言：摘要按内容语言生成与缓存，
+                        #     保证缓存键 language 与摘要实际语言一致
+                        content = article.get('content', '')
+                        content_language = detect_content_language(content, fallback=user_language)
+
+                        # 2.2 清理同文章的非内容语言缓存行：修复前摘要按用户 UI 语言
+                        #     生成并缓存（如中文文章下的 'en' 键英文摘要），这些旧行
+                        #     会在读取路径精确匹配时遮蔽内容语言摘要，按新语义删除
+                        pruned = self.db_manager.delete_article_summaries_except(global_article_id, content_language)
+                        if pruned:
+                            logger.info(
+                                f"清理非内容语言摘要缓存 {pruned} 条: "
+                                f"global_id={global_article_id}, content_language={content_language}"
+                            )
+
                         # 3. 检查语言特定摘要缓存
-                        cached_summary = self.db_manager.get_article_summary(global_article_id, user_language)
+                        cached_summary = self.db_manager.get_article_summary(global_article_id, content_language)
+
+                        # 存量脏缓存自愈：修复前缓存键为用户 UI 语言，个别条目的
+                        # 摘要语言可能与缓存键不符，检测到不一致时重新生成
+                        if cached_summary and not summary_matches_language(cached_summary, content_language):
+                            logger.info(
+                                f"摘要缓存语言与缓存键不符，重新生成: "
+                                f"global_id={global_article_id}, key={content_language}"
+                            )
+                            cached_summary = None
 
                         if cached_summary:
                             article['summary'] = cached_summary
@@ -163,18 +188,16 @@ class FeedRefresher:
                                     use_ai_summary = usage['ai_summary_count'] < ai_limit
 
                             if use_ai_summary:
-                                content = article.get('content', '')
-                                summary = self.nlp_processor.generate_summary(content, language=user_language)
+                                summary = self.nlp_processor.generate_summary(content, language=content_language)
                                 article['summary'] = summary
                                 article['entities'] = self.nlp_processor.extract_entities(content)
                                 self.subscription_service.record_ai_summary_usage(feed_user_id)
                             else:
-                                content = article.get('content', '')
                                 article['summary'] = self.nlp_processor._fallback_summary(content, 150)
                                 article['entities'] = []
 
-                            # 5. 缓存摘要并更新文章表
-                            self.db_manager.upsert_article_summary(global_article_id, user_language, article['summary'])
+                            # 5. 缓存摘要并更新文章表（缓存键为内容语言）
+                            self.db_manager.upsert_article_summary(global_article_id, content_language, article['summary'])
                             self.db_manager.update_article_summary(global_article_id, legacy_article_id, article['summary'])
 
                         stored_count += 1

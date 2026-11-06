@@ -85,3 +85,48 @@ def test_fallback_summary_no_space_after_punctuation(processor):
     text = "First sentence.Second sentence here."
     result = processor._fallback_summary(text, max_length=150)
     assert "Second sentence here" in result
+
+
+ZH_CONTENT = (
+    "当地时间周二，美国财政部宣布将对中国商品加征关税，"
+    "中方表示坚决反对并采取必要措施维护自身合法权益。"
+    "多家机构分析认为，此举将对全球供应链产生深远影响，"
+    "相关企业正在评估风险并调整生产布局，市场反应强烈。"
+)
+
+
+def test_generate_summary_uses_detected_content_language(processor, monkeypatch):
+    """中文文章即使传入 language='en'（UI 偏好），prompt 也应使用内容语言 zh"""
+    used_languages = []
+    original_get_prompt = processor._get_summary_prompt
+
+    def _spy_get_prompt(language):
+        used_languages.append(language)
+        return original_get_prompt(language)
+
+    monkeypatch.setattr(processor, "_get_summary_prompt", _spy_get_prompt)
+
+    processor.generate_summary(ZH_CONTENT, language='en')
+
+    assert used_languages == ['zh']
+
+
+def test_generate_summary_keeps_detected_en(processor, monkeypatch):
+    used_languages = []
+    original_get_prompt = processor._get_summary_prompt
+
+    def _spy_get_prompt(language):
+        used_languages.append(language)
+        return original_get_prompt(language)
+
+    monkeypatch.setattr(processor, "_get_summary_prompt", _spy_get_prompt)
+
+    en_content = (
+        "The Treasury Department announced new tariffs on Tuesday, "
+        "sparking broad concern among economists. Analysts say the move "
+        "could disrupt global supply chains and raise costs for consumers. "
+        "Several major companies are now reassessing their production plans."
+    )
+    processor.generate_summary(en_content, language='zh')
+
+    assert used_languages == ['en']

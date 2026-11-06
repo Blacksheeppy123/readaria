@@ -347,7 +347,9 @@ class TestGetUserArticlesQuery:
         assert result['summary'] == '中文摘要'
         query = cursor.execute.call_args_list[0][0][0]
         params = cursor.execute.call_args_list[0][0][1]
-        assert 'LEFT JOIN article_summaries as_lang' in query
+        # 优先精确语言匹配，未命中时回退到最近生成的内容语言摘要
+        assert 'LEFT JOIN LATERAL' in query
+        assert 'ORDER BY (s.language = %s) DESC, s.updated_at DESC' in query
         assert 'COALESCE(as_lang.summary, ga.summary) AS summary' in query
         assert params[0] == 'zh'
 
